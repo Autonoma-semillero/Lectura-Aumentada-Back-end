@@ -1,0 +1,1 @@
+export declare const PROGRESS_REPOSITORY = "PROGRESS_REPOSITORY";

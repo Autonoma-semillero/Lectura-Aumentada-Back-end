@@ -1,0 +1,1 @@
+export declare const ASSETS_REPOSITORY = "ASSETS_REPOSITORY";
