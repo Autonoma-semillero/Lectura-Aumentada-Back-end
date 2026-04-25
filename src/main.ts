@@ -1,11 +1,15 @@
 import { ValidationPipe } from '@nestjs/common';
+import { INestApplication } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { Request, Response } from 'express';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 
-async function bootstrap(): Promise<void> {
-  const app = await NestFactory.create(AppModule);
+type ExpressLikeHandler = (req: Request, res: Response) => void;
+
+let cachedApp: INestApplication | null = null;
+
+async function configureApp(app: INestApplication): Promise<void> {
   const server = app.getHttpAdapter().getInstance();
 
   app.setGlobalPrefix('api');
@@ -34,8 +38,34 @@ async function bootstrap(): Promise<void> {
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api-docs', app, document);
   SwaggerModule.setup('api/api-docs', app, document);
+}
 
+async function buildApp(): Promise<INestApplication> {
+  if (cachedApp) {
+    return cachedApp;
+  }
+
+  const app = await NestFactory.create(AppModule);
+  await configureApp(app);
+  await app.init();
+  cachedApp = app;
+  return app;
+}
+
+async function bootstrap(): Promise<void> {
+  const app = await buildApp();
   await app.listen(process.env.PORT ?? 3000);
 }
 
-void bootstrap();
+export default async function handler(
+  req: Request,
+  res: Response,
+): Promise<void> {
+  const app = await buildApp();
+  const instance = app.getHttpAdapter().getInstance() as ExpressLikeHandler;
+  instance(req, res);
+}
+
+if (process.env.VERCEL !== '1') {
+  void bootstrap();
+}
