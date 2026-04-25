@@ -37,7 +37,6 @@ async function configureApp(app: INestApplication): Promise<void> {
     .build();
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api-docs', app, document);
-  SwaggerModule.setup('api/api-docs', app, document);
 }
 
 async function buildApp(): Promise<INestApplication> {

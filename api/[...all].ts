@@ -37,7 +37,6 @@ async function createHandler(): Promise<Handler> {
     .build();
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api-docs', app, document);
-  SwaggerModule.setup('api/api-docs', app, document);
 
   await app.init();
   return app.getHttpAdapter().getInstance() as Handler;
