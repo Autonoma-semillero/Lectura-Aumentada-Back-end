@@ -46,7 +46,15 @@ export class AuthRepository implements IAuthRepository {
   }
 
   async validateUser(email: string, password: string): Promise<SessionUser | null> {
+    if (typeof email !== 'string' || typeof password !== 'string') {
+      return null;
+    }
+
     const normalizedEmail = email.trim().toLowerCase();
+    if (!normalizedEmail || password.length === 0) {
+      return null;
+    }
+
     const userDoc = await this.usersCollection().findOne({ email: normalizedEmail });
     if (!userDoc) {
       return null;
