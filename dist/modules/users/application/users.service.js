@@ -26,7 +26,14 @@ let UsersService = class UsersService {
         return this.usersRepository.findById(id);
     }
     async create(dto) {
-        return this.usersRepository.create(dto);
+        return this.usersRepository.create({
+            email: dto.email,
+            display_name: dto.display_name,
+            password_hash: dto.password_hash,
+            roles: dto.roles ?? ['student'],
+            status: dto.status ?? 'active',
+            metadata: dto.metadata,
+        });
     }
     async update(id, dto) {
         return this.usersRepository.update(id, dto);

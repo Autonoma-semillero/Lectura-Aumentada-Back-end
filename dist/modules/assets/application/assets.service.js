@@ -16,17 +16,23 @@ exports.AssetsService = void 0;
 const common_1 = require("@nestjs/common");
 const assets_tokens_1 = require("../domain/constants/assets.tokens");
 let AssetsService = class AssetsService {
-    constructor(repository) {
-        this.repository = repository;
+    constructor(assetsRepository) {
+        this.assetsRepository = assetsRepository;
     }
     async findAll() {
-        return this.repository.findAll();
+        return this.assetsRepository.findAll();
     }
     async findByMarker(markerId) {
-        return this.repository.findByMarker(markerId);
+        return this.assetsRepository.findByMarker(markerId);
     }
     async create(dto) {
-        return this.repository.create(dto);
+        return this.assetsRepository.create({
+            learning_unit_id: dto.learning_unit_id,
+            marker_id: dto.marker_id,
+            model_3d: dto.model_3d,
+            audio_pronunciacion: dto.audio_pronunciacion,
+            language: dto.language,
+        });
     }
 };
 exports.AssetsService = AssetsService;

@@ -1,15 +1,22 @@
 import { Schema } from 'mongoose';
 
+/**
+ * Colección `users` — validador canónico en `db/mongo/lectura_aumentada_full_schema.mongosh.js`.
+ */
 export const UserSchema = new Schema(
   {
-    nombre: { type: String, required: true },
-    email: { type: String, required: true, unique: true },
-    password_hash: { type: String, required: true },
-    rol: { type: String, enum: ['student', 'teacher', 'admin'], required: true },
-    institucion: { type: String },
-    grado: { type: String },
-    activo: { type: Boolean, default: true },
-    created_at: { type: Date, default: Date.now },
+    email: { type: String, required: true },
+    display_name: { type: String },
+    roles: [{ type: String }],
+    status: {
+      type: String,
+      enum: ['active', 'disabled', 'pending'],
+    },
+    password_hash: { type: String },
+    metadata: { type: Schema.Types.Mixed },
   },
-  { versionKey: false },
+  {
+    versionKey: false,
+    timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' },
+  },
 );

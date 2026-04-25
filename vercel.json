@@ -1,0 +1,18 @@
+{
+  "functions": {
+    "api/[...all].ts": {
+      "runtime": "@vercel/node@5.3.15",
+      "maxDuration": 30
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/health",
+      "destination": "/api/health"
+    },
+    {
+      "source": "/api-docs",
+      "destination": "/api/api-docs"
+    }
+  ]
+}

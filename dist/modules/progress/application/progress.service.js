@@ -16,14 +16,22 @@ exports.ProgressService = void 0;
 const common_1 = require("@nestjs/common");
 const progress_tokens_1 = require("../domain/constants/progress.tokens");
 let ProgressService = class ProgressService {
-    constructor(repository) {
-        this.repository = repository;
+    constructor(progressRepository) {
+        this.progressRepository = progressRepository;
     }
-    async listByStudent(studentId) {
-        return this.repository.listByStudent(studentId);
+    async listByUser(userId) {
+        return this.progressRepository.listByUser(userId);
     }
     async create(dto) {
-        return this.repository.create(dto);
+        return this.progressRepository.create({
+            user_id: dto.user_id,
+            learning_unit_id: dto.learning_unit_id,
+            session_id: dto.session_id,
+            action: dto.action,
+            ts: dto.ts,
+            payload: dto.payload,
+            device: dto.device,
+        });
     }
 };
 exports.ProgressService = ProgressService;

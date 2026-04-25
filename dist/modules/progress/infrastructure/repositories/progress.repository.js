@@ -20,7 +20,7 @@ let ProgressRepository = class ProgressRepository {
     constructor(connection) {
         this.connection = connection;
     }
-    async listByStudent(_studentId) {
+    async listByUser(_userId) {
         void this.connection;
         return [];
     }

@@ -24,7 +24,14 @@ export class UsersService {
   }
 
   async create(dto: CreateUserDto): Promise<User> {
-    return this.usersRepository.create(dto);
+    return this.usersRepository.create({
+      email: dto.email,
+      display_name: dto.display_name,
+      password_hash: dto.password_hash,
+      roles: dto.roles ?? ['student'],
+      status: dto.status ?? 'active',
+      metadata: dto.metadata,
+    });
   }
 
   async update(id: string, dto: UpdateUserDto): Promise<User | null> {

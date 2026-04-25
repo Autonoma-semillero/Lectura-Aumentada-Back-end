@@ -14,6 +14,7 @@ var __param = (this && this.__param) || function (paramIndex, decorator) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.AssetsController = void 0;
 const common_1 = require("@nestjs/common");
+const swagger_1 = require("@nestjs/swagger");
 const assets_service_1 = require("../application/assets.service");
 const create_asset_dto_1 = require("../dto/create-asset.dto");
 let AssetsController = class AssetsController {
@@ -52,6 +53,7 @@ __decorate([
     __metadata("design:returntype", Promise)
 ], AssetsController.prototype, "create", null);
 exports.AssetsController = AssetsController = __decorate([
+    (0, swagger_1.ApiTags)('assets'),
     (0, common_1.Controller)('assets'),
     __metadata("design:paramtypes", [assets_service_1.AssetsService])
 ], AssetsController);

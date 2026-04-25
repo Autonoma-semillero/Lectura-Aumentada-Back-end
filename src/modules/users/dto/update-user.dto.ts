@@ -1,9 +1,21 @@
+import { ApiPropertyOptional } from '@nestjs/swagger';
+
 export class UpdateUserDto {
-  nombre?: string;
+  @ApiPropertyOptional()
+  display_name?: string;
+
+  @ApiPropertyOptional()
   email?: string;
+
+  @ApiPropertyOptional()
   password_hash?: string;
-  rol?: 'student' | 'teacher' | 'admin';
-  institucion?: string;
-  grado?: string;
-  activo?: boolean;
+
+  @ApiPropertyOptional({ type: [String] })
+  roles?: string[];
+
+  @ApiPropertyOptional({ enum: ['active', 'disabled', 'pending'] })
+  status?: 'active' | 'disabled' | 'pending';
+
+  @ApiPropertyOptional({ type: 'object', additionalProperties: true })
+  metadata?: Record<string, unknown>;
 }

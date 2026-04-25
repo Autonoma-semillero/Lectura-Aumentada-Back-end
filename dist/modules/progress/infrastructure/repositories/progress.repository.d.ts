@@ -4,6 +4,6 @@ import { IProgressRepository } from '../../domain/interfaces/progress.repository
 export declare class ProgressRepository implements IProgressRepository {
     private readonly connection;
     constructor(connection: Connection);
-    listByStudent(_studentId: string): Promise<ProgressLog[]>;
+    listByUser(_userId: string): Promise<ProgressLog[]>;
     create(payload: Partial<ProgressLog>): Promise<ProgressLog>;
 }

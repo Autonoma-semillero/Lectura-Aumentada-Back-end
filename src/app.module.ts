@@ -8,6 +8,8 @@ import jwtConfig from './config/jwt.config';
 import { MongoDbModule } from './database/mongodb.module';
 import { LearningUnitsModule } from './modules/learning-units/learning-units.module';
 import { ProgressModule } from './modules/progress/progress.module';
+import { CategoriesModule } from './modules/categories/categories.module';
+import { DomanModule } from './modules/doman/doman.module';
 import { UsersModule } from './modules/users/users.module';
 
 @Module({
@@ -22,6 +24,8 @@ import { UsersModule } from './modules/users/users.module';
     LearningUnitsModule,
     ProgressModule,
     AssetsModule,
+    CategoriesModule,
+    DomanModule,
   ],
 })
 export class AppModule {}

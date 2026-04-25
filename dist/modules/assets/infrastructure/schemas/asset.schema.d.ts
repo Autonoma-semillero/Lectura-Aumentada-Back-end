@@ -1,29 +1,19 @@
 import { Schema } from 'mongoose';
-export declare const AssetSchema: Schema<any, import("mongoose").Model<any, any, any, any, any, any>, {}, {}, {}, {}, {
-    versionKey: false;
+export declare const LearningUnitEmbeddedAssetsSchema: Schema<any, import("mongoose").Model<any, any, any, any, any, any>, {}, {}, {}, {}, {
+    _id: false;
 }, {
-    learning_unit_id: import("mongoose").Types.ObjectId;
-    model_3d_url: string;
-    audio_url: string;
-    image_url: string;
-    marker_id: string;
-    created_at: NativeDate;
+    model_3d?: string | null | undefined;
+    audio_pronunciacion?: string | null | undefined;
 }, import("mongoose").Document<unknown, {}, import("mongoose").FlatRecord<{
-    learning_unit_id: import("mongoose").Types.ObjectId;
-    model_3d_url: string;
-    audio_url: string;
-    image_url: string;
-    marker_id: string;
-    created_at: NativeDate;
+    model_3d?: string | null | undefined;
+    audio_pronunciacion?: string | null | undefined;
 }>, {}, import("mongoose").MergeType<import("mongoose").DefaultSchemaOptions, {
-    versionKey: false;
+    _id: false;
 }>> & import("mongoose").FlatRecord<{
-    learning_unit_id: import("mongoose").Types.ObjectId;
-    model_3d_url: string;
-    audio_url: string;
-    image_url: string;
-    marker_id: string;
-    created_at: NativeDate;
+    model_3d?: string | null | undefined;
+    audio_pronunciacion?: string | null | undefined;
 }> & {
     _id: import("mongoose").Types.ObjectId;
+} & {
+    __v: number;
 }>;

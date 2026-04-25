@@ -8,18 +8,24 @@ import { CreateAssetDto } from '../dto/create-asset.dto';
 export class AssetsService {
   constructor(
     @Inject(ASSETS_REPOSITORY)
-    private readonly repository: IAssetsRepository,
+    private readonly assetsRepository: IAssetsRepository,
   ) {}
 
   async findAll(): Promise<Asset[]> {
-    return this.repository.findAll();
+    return this.assetsRepository.findAll();
   }
 
   async findByMarker(markerId: string): Promise<Asset | null> {
-    return this.repository.findByMarker(markerId);
+    return this.assetsRepository.findByMarker(markerId);
   }
 
   async create(dto: CreateAssetDto): Promise<Asset> {
-    return this.repository.create(dto);
+    return this.assetsRepository.create({
+      learning_unit_id: dto.learning_unit_id,
+      marker_id: dto.marker_id,
+      model_3d: dto.model_3d,
+      audio_pronunciacion: dto.audio_pronunciacion,
+      language: dto.language,
+    });
   }
 }

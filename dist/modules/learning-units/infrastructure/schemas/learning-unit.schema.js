@@ -2,22 +2,19 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.LearningUnitSchema = void 0;
 const mongoose_1 = require("mongoose");
+const learningUnitAssetsSchema = new mongoose_1.Schema({
+    model_3d: { type: String },
+    audio_pronunciacion: { type: String },
+}, { _id: false });
 exports.LearningUnitSchema = new mongoose_1.Schema({
-    palabra: { type: String, required: true },
-    categoria_id: { type: mongoose_1.Schema.Types.ObjectId, required: true },
-    marker_id: { type: String, required: true, unique: true },
-    assets: {
-        model_3d_url: { type: String, required: true },
-        audio_url: { type: String, required: true },
-        imagen_url: { type: String, required: true },
-    },
-    metadata_accesibilidad: {
-        descripcion_visual: { type: String, required: true },
-        alt_text: { type: String, required: true },
-    },
-    estado: { type: String, enum: ['activo', 'inactivo'], default: 'activo' },
-    created_by: { type: mongoose_1.Schema.Types.ObjectId, required: true },
-    created_at: { type: Date, default: Date.now },
-    updated_at: { type: Date, default: Date.now },
-}, { versionKey: false });
+    word: { type: String, required: true },
+    category_id: { type: mongoose_1.Schema.Types.ObjectId },
+    marker_id: { type: String, required: true },
+    assets: { type: learningUnitAssetsSchema, default: {} },
+    metadata_accessibility: { type: mongoose_1.Schema.Types.Mixed },
+    language: { type: String },
+}, {
+    versionKey: false,
+    timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' },
+});
 //# sourceMappingURL=learning-unit.schema.js.map

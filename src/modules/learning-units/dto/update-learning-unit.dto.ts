@@ -1,11 +1,24 @@
+import { ApiPropertyOptional } from '@nestjs/swagger';
+
 export class UpdateLearningUnitDto {
-  palabra?: string;
-  categoria_id?: string;
+  @ApiPropertyOptional()
+  word?: string;
+
+  @ApiPropertyOptional()
+  category_id?: string;
+
+  @ApiPropertyOptional()
   marker_id?: string;
-  model_3d_url?: string;
-  audio_url?: string;
-  imagen_url?: string;
-  descripcion_visual?: string;
-  alt_text?: string;
-  estado?: 'activo' | 'inactivo';
+
+  @ApiPropertyOptional()
+  model_3d?: string;
+
+  @ApiPropertyOptional()
+  audio_pronunciacion?: string;
+
+  @ApiPropertyOptional({ type: 'object', additionalProperties: true })
+  metadata_accessibility?: Record<string, unknown>;
+
+  @ApiPropertyOptional()
+  language?: string;
 }

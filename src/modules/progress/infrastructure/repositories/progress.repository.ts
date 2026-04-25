@@ -10,7 +10,7 @@ export class ProgressRepository implements IProgressRepository {
     @Inject(MONGO_CONNECTION) private readonly connection: Connection,
   ) {}
 
-  async listByStudent(_studentId: string): Promise<ProgressLog[]> {
+  async listByUser(_userId: string): Promise<ProgressLog[]> {
     void this.connection;
     return [];
   }

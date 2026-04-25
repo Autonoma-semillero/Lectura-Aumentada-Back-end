@@ -1,3 +1,3 @@
 export declare class ListProgressQueryDto {
-    student_id?: string;
+    user_id?: string;
 }

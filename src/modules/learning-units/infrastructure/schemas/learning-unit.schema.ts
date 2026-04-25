@@ -1,23 +1,27 @@
 import { Schema } from 'mongoose';
 
+const learningUnitAssetsSchema = new Schema(
+  {
+    model_3d: { type: String },
+    audio_pronunciacion: { type: String },
+  },
+  { _id: false },
+);
+
+/**
+ * Colección `learning_units` — activos AR embebidos en `assets` (sin colección `assets`).
+ */
 export const LearningUnitSchema = new Schema(
   {
-    palabra: { type: String, required: true },
-    categoria_id: { type: Schema.Types.ObjectId, required: true },
-    marker_id: { type: String, required: true, unique: true },
-    assets: {
-      model_3d_url: { type: String, required: true },
-      audio_url: { type: String, required: true },
-      imagen_url: { type: String, required: true },
-    },
-    metadata_accesibilidad: {
-      descripcion_visual: { type: String, required: true },
-      alt_text: { type: String, required: true },
-    },
-    estado: { type: String, enum: ['activo', 'inactivo'], default: 'activo' },
-    created_by: { type: Schema.Types.ObjectId, required: true },
-    created_at: { type: Date, default: Date.now },
-    updated_at: { type: Date, default: Date.now },
+    word: { type: String, required: true },
+    category_id: { type: Schema.Types.ObjectId },
+    marker_id: { type: String, required: true },
+    assets: { type: learningUnitAssetsSchema, default: {} },
+    metadata_accessibility: { type: Schema.Types.Mixed },
+    language: { type: String },
   },
-  { versionKey: false },
+  {
+    versionKey: false,
+    timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' },
+  },
 );

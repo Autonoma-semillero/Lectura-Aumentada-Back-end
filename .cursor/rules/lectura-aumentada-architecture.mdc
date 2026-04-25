@@ -1,0 +1,41 @@
+---
+description: Arquitectura en capas y convenciones obligatorias del backend Lectura Aumentada
+globs: src/**/*.ts
+alwaysApply: true
+---
+
+# Lectura Aumentada — reglas de código
+
+Antes de editar `src/**/*.ts`, lee `AGENTS.md` en la raíz del repositorio.
+
+## Flujo fijo
+
+`Controller → Service → IRepository (token) → Repository (Mongo)`
+
+- No Mongoose ni `Connection` en controllers ni services.
+- No lógica de negocio en controllers ni DTOs.
+- Dominio (`domain/interfaces`, `domain/constants`) sin imports de infrastructure ni DTOs.
+
+## Por módulo
+
+- Tokens en `domain/constants/*.tokens.ts`.
+- Interfaz `I*Repository` en `domain/interfaces/*repository.interface.ts`.
+- Servicio inyecta con `@Inject(TOKEN)` y nombra la propiedad `{modulo}Repository` (camelCase), nunca solo `repository`.
+
+## DTO y API
+
+- Validar con `class-validator` donde corresponda.
+- Documentar propiedades públicas del API con `@ApiProperty` / `@ApiPropertyOptional`.
+- `@ApiTags` en cada controller.
+- Mapear DTO a dominio en el service con métodos/helpers explícitos; evitar `as unknown as`.
+
+## Rutas
+
+- REST bajo prefijo global `/api`.
+- Swagger en `/api-docs`.
+
+## MongoDB
+
+- Esquema canónico: `db/mongo/lectura_aumentada_full_schema.mongosh.js`. Mongoose en `src/modules/*/infrastructure/schemas` y `src/database/doman.schemas.ts` debe coincidir con ese contrato.
+- No hay colección `assets`; activos AR van en `learning_units.assets`.
+- **Temática = `categories`**. Tarjetas Doman enlazan con `doman_word_cards.category_id` (sin colección puente `theme_card_links`).

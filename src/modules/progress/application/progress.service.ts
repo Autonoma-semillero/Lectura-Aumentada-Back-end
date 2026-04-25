@@ -8,14 +8,22 @@ import { CreateProgressLogDto } from '../dto/create-progress-log.dto';
 export class ProgressService {
   constructor(
     @Inject(PROGRESS_REPOSITORY)
-    private readonly repository: IProgressRepository,
+    private readonly progressRepository: IProgressRepository,
   ) {}
 
-  async listByStudent(studentId: string): Promise<ProgressLog[]> {
-    return this.repository.listByStudent(studentId);
+  async listByUser(userId: string): Promise<ProgressLog[]> {
+    return this.progressRepository.listByUser(userId);
   }
 
   async create(dto: CreateProgressLogDto): Promise<ProgressLog> {
-    return this.repository.create(dto);
+    return this.progressRepository.create({
+      user_id: dto.user_id,
+      learning_unit_id: dto.learning_unit_id,
+      session_id: dto.session_id,
+      action: dto.action,
+      ts: dto.ts,
+      payload: dto.payload,
+      device: dto.device,
+    });
   }
 }

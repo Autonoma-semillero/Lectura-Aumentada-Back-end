@@ -1,3 +1,6 @@
+import { ApiPropertyOptional } from '@nestjs/swagger';
+
 export class ListProgressQueryDto {
-  student_id?: string;
+  @ApiPropertyOptional({ description: 'Filtrar por ObjectId del usuario' })
+  user_id?: string;
 }

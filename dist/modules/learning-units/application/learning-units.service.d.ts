@@ -3,10 +3,12 @@ import { ILearningUnitsRepository } from '../domain/interfaces/learning-units.re
 import { CreateLearningUnitDto } from '../dto/create-learning-unit.dto';
 import { UpdateLearningUnitDto } from '../dto/update-learning-unit.dto';
 export declare class LearningUnitsService {
-    private readonly repository;
-    constructor(repository: ILearningUnitsRepository);
+    private readonly learningUnitsRepository;
+    constructor(learningUnitsRepository: ILearningUnitsRepository);
     findAll(): Promise<LearningUnit[]>;
     findById(id: string): Promise<LearningUnit | null>;
     create(dto: CreateLearningUnitDto): Promise<LearningUnit>;
     update(id: string, dto: UpdateLearningUnitDto): Promise<LearningUnit | null>;
+    private toCreatePayload;
+    private toUpdatePayload;
 }

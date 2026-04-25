@@ -1,35 +1,40 @@
 import { Schema } from 'mongoose';
 export declare const UserSchema: Schema<any, import("mongoose").Model<any, any, any, any, any, any>, {}, {}, {}, {}, {
     versionKey: false;
+    timestamps: {
+        createdAt: string;
+        updatedAt: string;
+    };
 }, {
-    created_at: NativeDate;
-    activo: boolean;
-    nombre: string;
+    [x: string]: NativeDate;
     email: string;
-    password_hash: string;
-    rol: "student" | "teacher" | "admin";
-    institucion?: string | null | undefined;
-    grado?: string | null | undefined;
+    roles: string[];
+    display_name?: string | null | undefined;
+    status?: "active" | "disabled" | "pending" | null | undefined;
+    password_hash?: string | null | undefined;
+    metadata?: any;
 }, import("mongoose").Document<unknown, {}, import("mongoose").FlatRecord<{
-    created_at: NativeDate;
-    activo: boolean;
-    nombre: string;
+    [x: string]: NativeDate;
     email: string;
-    password_hash: string;
-    rol: "student" | "teacher" | "admin";
-    institucion?: string | null | undefined;
-    grado?: string | null | undefined;
+    roles: string[];
+    display_name?: string | null | undefined;
+    status?: "active" | "disabled" | "pending" | null | undefined;
+    password_hash?: string | null | undefined;
+    metadata?: any;
 }>, {}, import("mongoose").MergeType<import("mongoose").DefaultSchemaOptions, {
     versionKey: false;
+    timestamps: {
+        createdAt: string;
+        updatedAt: string;
+    };
 }>> & import("mongoose").FlatRecord<{
-    created_at: NativeDate;
-    activo: boolean;
-    nombre: string;
+    [x: string]: NativeDate;
     email: string;
-    password_hash: string;
-    rol: "student" | "teacher" | "admin";
-    institucion?: string | null | undefined;
-    grado?: string | null | undefined;
+    roles: string[];
+    display_name?: string | null | undefined;
+    status?: "active" | "disabled" | "pending" | null | undefined;
+    password_hash?: string | null | undefined;
+    metadata?: any;
 }> & {
     _id: import("mongoose").Types.ObjectId;
 }>;

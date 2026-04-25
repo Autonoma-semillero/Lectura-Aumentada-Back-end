@@ -1,11 +1,9 @@
 export declare class UpdateLearningUnitDto {
-    palabra?: string;
-    categoria_id?: string;
+    word?: string;
+    category_id?: string;
     marker_id?: string;
-    model_3d_url?: string;
-    audio_url?: string;
-    imagen_url?: string;
-    descripcion_visual?: string;
-    alt_text?: string;
-    estado?: 'activo' | 'inactivo';
+    model_3d?: string;
+    audio_pronunciacion?: string;
+    metadata_accessibility?: Record<string, unknown>;
+    language?: string;
 }

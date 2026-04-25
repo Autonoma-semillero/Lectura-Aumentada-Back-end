@@ -17,6 +17,8 @@ const jwt_config_1 = require("./config/jwt.config");
 const mongodb_module_1 = require("./database/mongodb.module");
 const learning_units_module_1 = require("./modules/learning-units/learning-units.module");
 const progress_module_1 = require("./modules/progress/progress.module");
+const categories_module_1 = require("./modules/categories/categories.module");
+const doman_module_1 = require("./modules/doman/doman.module");
 const users_module_1 = require("./modules/users/users.module");
 let AppModule = class AppModule {
 };
@@ -34,6 +36,8 @@ exports.AppModule = AppModule = __decorate([
             learning_units_module_1.LearningUnitsModule,
             progress_module_1.ProgressModule,
             assets_module_1.AssetsModule,
+            categories_module_1.CategoriesModule,
+            doman_module_1.DomanModule,
         ],
     })
 ], AppModule);

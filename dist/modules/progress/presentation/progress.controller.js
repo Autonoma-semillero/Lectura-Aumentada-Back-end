@@ -14,6 +14,7 @@ var __param = (this && this.__param) || function (paramIndex, decorator) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.ProgressController = void 0;
 const common_1 = require("@nestjs/common");
+const swagger_1 = require("@nestjs/swagger");
 const progress_service_1 = require("../application/progress.service");
 const create_progress_log_dto_1 = require("../dto/create-progress-log.dto");
 const list_progress_query_dto_1 = require("../dto/list-progress-query.dto");
@@ -22,7 +23,7 @@ let ProgressController = class ProgressController {
         this.service = service;
     }
     async list(query) {
-        return this.service.listByStudent(query.student_id ?? '');
+        return this.service.listByUser(query.user_id ?? '');
     }
     async create(dto) {
         return this.service.create(dto);
@@ -44,6 +45,7 @@ __decorate([
     __metadata("design:returntype", Promise)
 ], ProgressController.prototype, "create", null);
 exports.ProgressController = ProgressController = __decorate([
+    (0, swagger_1.ApiTags)('progress'),
     (0, common_1.Controller)('progress'),
     __metadata("design:paramtypes", [progress_service_1.ProgressService])
 ], ProgressController);

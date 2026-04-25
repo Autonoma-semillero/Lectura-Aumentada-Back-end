@@ -14,6 +14,7 @@ var __param = (this && this.__param) || function (paramIndex, decorator) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.LearningUnitsController = void 0;
 const common_1 = require("@nestjs/common");
+const swagger_1 = require("@nestjs/swagger");
 const learning_units_service_1 = require("../application/learning-units.service");
 const create_learning_unit_dto_1 = require("../dto/create-learning-unit.dto");
 const update_learning_unit_dto_1 = require("../dto/update-learning-unit.dto");
@@ -64,6 +65,7 @@ __decorate([
     __metadata("design:returntype", Promise)
 ], LearningUnitsController.prototype, "update", null);
 exports.LearningUnitsController = LearningUnitsController = __decorate([
+    (0, swagger_1.ApiTags)('learning-units'),
     (0, common_1.Controller)('learning-units'),
     __metadata("design:paramtypes", [learning_units_service_1.LearningUnitsService])
 ], LearningUnitsController);

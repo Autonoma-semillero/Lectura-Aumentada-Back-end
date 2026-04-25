@@ -1,9 +1,8 @@
 export declare class CreateUserDto {
-    nombre: string;
     email: string;
+    display_name?: string;
     password_hash: string;
-    rol: 'student' | 'teacher' | 'admin';
-    institucion?: string;
-    grado?: string;
-    activo?: boolean;
+    roles?: string[];
+    status?: 'active' | 'disabled' | 'pending';
+    metadata?: Record<string, unknown>;
 }

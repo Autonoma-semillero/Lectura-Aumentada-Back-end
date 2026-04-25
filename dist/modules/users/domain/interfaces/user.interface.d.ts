@@ -1,11 +1,11 @@
 export interface User {
     id: string;
-    nombre: string;
     email: string;
-    password_hash: string;
-    rol: 'student' | 'teacher' | 'admin';
-    institucion?: string;
-    grado?: string;
-    activo: boolean;
+    display_name?: string;
+    roles: string[];
+    status?: 'active' | 'disabled' | 'pending';
+    password_hash?: string;
+    metadata?: Record<string, unknown>;
     created_at: Date;
+    updated_at: Date;
 }
