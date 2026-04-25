@@ -10,6 +10,7 @@ import { LearningUnitsModule } from './modules/learning-units/learning-units.mod
 import { ProgressModule } from './modules/progress/progress.module';
 import { CategoriesModule } from './modules/categories/categories.module';
 import { DomanModule } from './modules/doman/doman.module';
+import { SeedingModule } from './modules/seeding/seeding.module';
 import { UsersModule } from './modules/users/users.module';
 
 @Module({
@@ -26,6 +27,7 @@ import { UsersModule } from './modules/users/users.module';
     AssetsModule,
     CategoriesModule,
     DomanModule,
+    SeedingModule,
   ],
 })
 export class AppModule {}
