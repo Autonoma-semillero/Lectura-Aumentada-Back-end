@@ -1,18 +1,23 @@
 {
-  "functions": {
-    "api/[...all].ts": {
-      "runtime": "@vercel/node@5.3.15",
-      "maxDuration": 30
-    }
-  },
-  "rewrites": [
+  "version": 2,
+  "builds": [
     {
-      "source": "/health",
-      "destination": "/api/health"
+      "src": "api/[...all].ts",
+      "use": "@vercel/node"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/health",
+      "dest": "/api/health"
     },
     {
-      "source": "/api-docs",
-      "destination": "/api/api-docs"
+      "src": "/api-docs",
+      "dest": "/api/api-docs"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/api/[...all].ts"
     }
   ]
 }
