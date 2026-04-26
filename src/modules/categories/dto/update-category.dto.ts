@@ -1,5 +1,5 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsMongoId, IsNumber, IsOptional, IsString, Max, Min, MinLength } from 'class-validator';
+import { IsMongoId, IsNumber, IsOptional, IsString, Max, MaxLength, Min, MinLength } from 'class-validator';
 
 export class UpdateCategoryDto {
   @ApiPropertyOptional()
@@ -18,6 +18,12 @@ export class UpdateCategoryDto {
   @IsOptional()
   @IsString()
   description?: string;
+
+  @ApiPropertyOptional({ example: 'restaurant' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  icon?: string;
 
   @ApiPropertyOptional()
   @IsOptional()

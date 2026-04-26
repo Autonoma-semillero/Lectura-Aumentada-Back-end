@@ -65,6 +65,7 @@ ensureCollection('categories', {
       name: { bsonType: 'string', minLength: 1 },
       slug: { bsonType: 'string', minLength: 1 },
       description: { bsonType: 'string' },
+      icon: { bsonType: 'string' },
       parent_id: { bsonType: 'objectId' },
       sort_order: { bsonType: 'int' },
       created_at: { bsonType: 'date' },
