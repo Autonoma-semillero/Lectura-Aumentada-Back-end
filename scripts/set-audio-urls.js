@@ -41,6 +41,18 @@ const AUDIO_MAP = [
   { word: 'queso',    id: '1MsUZ63XG7Ap1NggDrOS6fIPSsH8eabWl' },
   { word: 'sopa',     id: '15RhuphrdOnjEf7wVqa8AYVewc_78-fmE' },
   { word: 'arroz',    id: '1L88TfkO2S7FmeRmKMZnJ_At8YklUUX3x' },
+  // Naturaleza
+  { word: 'árbol',    id: '1q3AKNPoVqXV__3DJViFMhfy7umhhdOZ_' },
+  { word: 'flor',     id: '1glMprHTrw5J3qrToH54NdxGm-s3XyfQy' },
+  { word: 'luna',     id: '1OPHHsi2RzV5O6-8Ym8IGE_kFkOov_kTO' },
+  { word: 'nube',     id: '14S6FazMzdys7_C5C4pDfaIVQoEFy9-3N' },
+  { word: 'sol',      id: '15tbqQ_vdjXI2LtCAgE-KC3wr0thFmsXu' },
+  // Juguetes
+  { word: 'bloques',  id: '1RU8jlld5_ckKa4fE9V87vNlY9UogN8-O' },
+  { word: 'carro',    id: '1jeSglrlfIbBFEHLH5g1C3hfRVaE4wU1v' },
+  { word: 'pelota',   id: '1hMdVkr3tXlXWjwkp40uFiq0lPA-vQQuV' },
+  { word: 'tren',     id: '1FQf1zqLmt7OYZsrFndj72Zq7lRie_Rvh' },
+  { word: 'trompo',   id: '1gHgjsO2D-CalFqMcfTLHtBA_ZeQVP7P5' },
 ];
 
 async function main() {
@@ -65,7 +77,7 @@ async function main() {
     }
 
     console.log(`\n🎉  Total: ${total} tarjetas con audio asignado`);
-    console.log('    Naturaleza y Juguetes quedan pendientes (sin archivos aún)\n');
+    console.log('    Todas las categorías demo quedaron sincronizadas con Google Drive.\n');
   } finally {
     await client.close();
   }
@@ -75,3 +87,4 @@ main().catch((err) => {
   console.error('❌  Error:', err.message);
   process.exit(1);
 });
+
