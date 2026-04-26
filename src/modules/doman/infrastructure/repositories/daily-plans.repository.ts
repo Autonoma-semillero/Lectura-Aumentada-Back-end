@@ -120,6 +120,14 @@ export class DailyPlansRepository implements IDailyPlansRepository {
     return entity;
   }
 
+  async delete(id: string): Promise<boolean> {
+    if (!Types.ObjectId.isValid(id)) {
+      return false;
+    }
+    const result = await this.coll().deleteOne({ _id: new Types.ObjectId(id) });
+    return result.deletedCount > 0;
+  }
+
   async update(
     id: string,
     patch: DailyPlanPatchPayload,

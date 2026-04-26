@@ -35,4 +35,5 @@ export interface IDailyPlansRepository {
     id: string,
     patch: DailyPlanPatchPayload,
   ): Promise<DomanDailyPlan | null>;
+  delete(id: string): Promise<boolean>;
 }

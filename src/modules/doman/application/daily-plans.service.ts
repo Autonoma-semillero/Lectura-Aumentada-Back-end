@@ -170,6 +170,22 @@ export class DailyPlansService {
     return this.toSummary(plan, sessions, selectedCards);
   }
 
+  async delete(id: string): Promise<void> {
+    if (!Types.ObjectId.isValid(id)) {
+      throw new BadRequestException('Invalid daily plan id');
+    }
+    const plan = await this.dailyPlansRepository.findById(id);
+    if (!plan) {
+      throw new NotFoundException('Daily plan not found');
+    }
+    const sessions = await this.sessionsRepository.findByDailyPlanId(id);
+    if (sessions.length > 0) {
+      await this.sessionCardsRepository.deleteBySessionIds(sessions.map((s) => s.id));
+      await this.sessionsRepository.deleteByDailyPlanId(id);
+    }
+    await this.dailyPlansRepository.delete(id);
+  }
+
   async create(dto: CreateDailyPlanDto): Promise<DomanDailyPlan> {
     await this.categoriesService.findById(dto.category_id);
     const planDateUtcMidnight = planDateToUtcMidnight(dto.plan_date);

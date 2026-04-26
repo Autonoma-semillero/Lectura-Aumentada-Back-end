@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   HttpCode,
   HttpStatus,
@@ -55,5 +56,11 @@ export class DailyPlansController {
     @Body() dto: UpdateDailyPlanDto,
   ): Promise<unknown> {
     return this.dailyPlansService.update(id, dto);
+  }
+
+  @Delete(':id')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async remove(@Param('id') id: string): Promise<void> {
+    return this.dailyPlansService.delete(id);
   }
 }
