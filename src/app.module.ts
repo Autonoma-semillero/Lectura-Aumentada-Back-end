@@ -11,7 +11,6 @@ import { ProgressModule } from './modules/progress/progress.module';
 import { CategoriesModule } from './modules/categories/categories.module';
 import { DomanModule } from './modules/doman/doman.module';
 import { SeedingModule } from './modules/seeding/seeding.module';
-import { UploadsModule } from './modules/uploads/uploads.module';
 import { UsersModule } from './modules/users/users.module';
 
 @Module({
@@ -29,7 +28,6 @@ import { UsersModule } from './modules/users/users.module';
     CategoriesModule,
     DomanModule,
     SeedingModule,
-    UploadsModule,
   ],
 })
 export class AppModule {}

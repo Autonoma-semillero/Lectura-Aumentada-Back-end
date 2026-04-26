@@ -4,7 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Types } from 'mongoose';
+import { isMongoObjectId } from '../../../common/utils/object-id';
 import { WORD_CARDS_REPOSITORY } from '../../categories/domain/constants/categories.tokens';
 import { IWordCardsRepository } from '../../categories/domain/interfaces/word-cards.repository.interface';
 import {
@@ -43,14 +43,14 @@ export class DomanSessionsService {
   ) {}
 
   async list(query: ListDomanSessionsQueryDto): Promise<DomanSession[]> {
-    if (!Types.ObjectId.isValid(query.daily_plan_id)) {
+    if (!isMongoObjectId(query.daily_plan_id)) {
       throw new BadRequestException('Invalid daily_plan_id');
     }
     return this.sessionsRepository.findByDailyPlanId(query.daily_plan_id);
   }
 
   async getById(id: string): Promise<DomanSession> {
-    if (!Types.ObjectId.isValid(id)) {
+    if (!isMongoObjectId(id)) {
       throw new BadRequestException('Invalid session id');
     }
     const session = await this.sessionsRepository.findById(id);
@@ -66,7 +66,7 @@ export class DomanSessionsService {
   }
 
   async getNext(query: StudentIdQueryDto): Promise<unknown> {
-    if (!Types.ObjectId.isValid(query.student_id)) {
+    if (!isMongoObjectId(query.student_id)) {
       throw new BadRequestException('Invalid student_id');
     }
     const today = planDateToUtcMidnight(new Date().toISOString().slice(0, 10));
@@ -93,7 +93,7 @@ export class DomanSessionsService {
   }
 
   async getHistory(studentId: string): Promise<unknown> {
-    if (!Types.ObjectId.isValid(studentId)) {
+    if (!isMongoObjectId(studentId)) {
       throw new BadRequestException('Invalid student_id');
     }
     const sessions = await this.sessionsRepository.findByStudentAndStatuses(
@@ -113,7 +113,7 @@ export class DomanSessionsService {
   }
 
   async getProgressSummary(studentId: string): Promise<StudentDomanProgressSummary> {
-    if (!Types.ObjectId.isValid(studentId)) {
+    if (!isMongoObjectId(studentId)) {
       throw new BadRequestException('Invalid student_id');
     }
     const sessions = await this.sessionsRepository.findByStudentAndStatuses(studentId, [

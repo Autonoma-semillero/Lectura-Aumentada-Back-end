@@ -3,8 +3,12 @@ import { ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
 import { AuthSeedService } from './application/auth-seed.service';
 import { AuthService } from './application/auth.service';
-import { AUTH_REPOSITORY } from './domain/constants/auth.tokens';
+import {
+  AUTH_REPOSITORY,
+  AUTH_SEED_REPOSITORY,
+} from './domain/constants/auth.tokens';
 import { AuthRepository } from './infrastructure/repositories/auth.repository';
+import { AuthSeedRepository } from './infrastructure/repositories/auth-seed.repository';
 import { AuthController } from './presentation/auth.controller';
 
 @Module({
@@ -27,7 +31,11 @@ import { AuthController } from './presentation/auth.controller';
     AuthService,
     {
       provide: AUTH_REPOSITORY,
-        useClass: AuthRepository,
+      useClass: AuthRepository,
+    },
+    {
+      provide: AUTH_SEED_REPOSITORY,
+      useClass: AuthSeedRepository,
     },
   ],
   exports: [AuthService],

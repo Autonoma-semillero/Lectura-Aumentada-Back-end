@@ -6,7 +6,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { MongoServerError } from 'mongodb';
-import { Types } from 'mongoose';
+import { isMongoObjectId } from '../../../common/utils/object-id';
 import {
   CATEGORIES_REPOSITORY,
   WORD_CARDS_REPOSITORY,
@@ -40,7 +40,7 @@ export class CategoriesService {
   async findWithAvailableWordCardsForStudent(
     studentId: string,
   ): Promise<CategoryWithWordCardAvailability[]> {
-    if (!Types.ObjectId.isValid(studentId)) {
+    if (!isMongoObjectId(studentId)) {
       throw new BadRequestException('Invalid student_id');
     }
     const rows =
@@ -68,7 +68,7 @@ export class CategoriesService {
   }
 
   async findById(id: string): Promise<Category> {
-    if (!Types.ObjectId.isValid(id)) {
+    if (!isMongoObjectId(id)) {
       throw new BadRequestException('Invalid category id');
     }
     const c = await this.categoriesRepository.findById(id);

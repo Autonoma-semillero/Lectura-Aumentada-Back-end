@@ -6,7 +6,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { MongoServerError } from 'mongodb';
-import { Types } from 'mongoose';
+import { isMongoObjectId } from '../../../common/utils/object-id';
 import {
   CATEGORIES_REPOSITORY,
   WORD_CARDS_REPOSITORY,
@@ -34,7 +34,7 @@ export class WordCardsService {
   ) {}
 
   async listByCategory(categoryId: string): Promise<WordCardListed[]> {
-    if (!Types.ObjectId.isValid(categoryId)) {
+    if (!isMongoObjectId(categoryId)) {
       throw new BadRequestException('Invalid category id');
     }
     const cat = await this.categoriesRepository.findById(categoryId);
@@ -45,11 +45,11 @@ export class WordCardsService {
   }
 
   async listByQuery(query: ListWordCardsQueryDto): Promise<WordCardListed[]> {
-    if (!Types.ObjectId.isValid(query.student_id)) {
+    if (!isMongoObjectId(query.student_id)) {
       throw new BadRequestException('Invalid student_id');
     }
     if (query.category_id) {
-      if (!Types.ObjectId.isValid(query.category_id)) {
+      if (!isMongoObjectId(query.category_id)) {
         throw new BadRequestException('Invalid category_id');
       }
       return this.listByStudentAndCategory(
@@ -64,10 +64,10 @@ export class WordCardsService {
     studentId: string,
     categoryId: string,
   ): Promise<WordCardListed[]> {
-    if (!Types.ObjectId.isValid(studentId)) {
+    if (!isMongoObjectId(studentId)) {
       throw new BadRequestException('Invalid student_id');
     }
-    if (!Types.ObjectId.isValid(categoryId)) {
+    if (!isMongoObjectId(categoryId)) {
       throw new BadRequestException('Invalid category_id');
     }
     const cat = await this.categoriesRepository.findById(categoryId);
@@ -81,7 +81,7 @@ export class WordCardsService {
   }
 
   async getById(wordCardId: string): Promise<WordCardListed> {
-    if (!Types.ObjectId.isValid(wordCardId)) {
+    if (!isMongoObjectId(wordCardId)) {
       throw new BadRequestException('Invalid word card id');
     }
     const card = await this.wordCardsRepository.findById(wordCardId);
@@ -191,7 +191,7 @@ export class WordCardsService {
     wordCardId: string,
     dto: UpdateWordCardCategoryDto,
   ): Promise<WordCardListed> {
-    if (!Types.ObjectId.isValid(wordCardId)) {
+    if (!isMongoObjectId(wordCardId)) {
       throw new BadRequestException('Invalid word card id');
     }
     const card = await this.wordCardsRepository.findById(wordCardId);
@@ -199,7 +199,7 @@ export class WordCardsService {
       throw new NotFoundException('Word card not found');
     }
     const nextId = dto.category_id.trim();
-    if (!Types.ObjectId.isValid(nextId)) {
+    if (!isMongoObjectId(nextId)) {
       throw new BadRequestException('Invalid category_id');
     }
     const cat = await this.categoriesRepository.findById(nextId);
