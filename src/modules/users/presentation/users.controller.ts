@@ -1,6 +1,7 @@
 import { Body, Controller, Get, Param, Patch, Post } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { UsersService } from '../application/users.service';
+import { User } from '../domain/interfaces/user.interface';
 import { CreateUserDto } from '../dto/create-user.dto';
 import { UpdateUserDto } from '../dto/update-user.dto';
 
@@ -11,17 +12,18 @@ export class UsersController {
 
   @Get()
   async findAll(): Promise<unknown> {
-    return this.usersService.findAll();
+    return (await this.usersService.findAll()).map(toPublicUser);
   }
 
   @Get(':id')
   async findById(@Param('id') id: string): Promise<unknown> {
-    return this.usersService.findById(id);
+    const user = await this.usersService.findById(id);
+    return user ? toPublicUser(user) : null;
   }
 
   @Post()
   async create(@Body() dto: CreateUserDto): Promise<unknown> {
-    return this.usersService.create(dto);
+    return toPublicUser(await this.usersService.create(dto));
   }
 
   @Patch(':id')
@@ -29,6 +31,12 @@ export class UsersController {
     @Param('id') id: string,
     @Body() dto: UpdateUserDto,
   ): Promise<unknown> {
-    return this.usersService.update(id, dto);
+    const user = await this.usersService.update(id, dto);
+    return user ? toPublicUser(user) : null;
   }
+}
+
+function toPublicUser(user: User): Omit<User, 'password_hash'> {
+  const { password_hash: _passwordHash, ...publicUser } = user;
+  return publicUser;
 }
