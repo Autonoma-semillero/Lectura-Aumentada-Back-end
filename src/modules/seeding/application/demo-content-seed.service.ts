@@ -31,7 +31,7 @@ const DEMO_CATEGORIES: DemoCategorySeed[] = [
     slug: 'familia',
     description: 'Vocabulario basico de los integrantes de la familia.',
     icon: 'brush',
-    words: ['mama', 'papa', 'bebe', 'abuelo', 'hermana'],
+    words: ['mamá', 'papá', 'prima', 'abuelo', 'hermana'],
   },
   {
     name: 'Cocina',
@@ -45,7 +45,7 @@ const DEMO_CATEGORIES: DemoCategorySeed[] = [
     slug: 'naturaleza',
     description: 'Elementos del entorno natural para lectura inicial.',
     icon: 'rocket_launch',
-    words: ['arbol', 'flor', 'nube', 'sol', 'luna'],
+    words: ['árbol', 'flor', 'nube', 'sol', 'luna'],
   },
   {
     name: 'Juguetes',
