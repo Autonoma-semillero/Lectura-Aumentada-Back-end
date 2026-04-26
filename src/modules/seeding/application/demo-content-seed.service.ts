@@ -104,8 +104,10 @@ export class DemoContentSeedService implements OnModuleInit {
         if (!categoryId) {
           continue;
         }
+        const currentWords: string[] = [];
         for (const [wordIndex, rawWord] of categorySeed.words.entries()) {
           const normalizedWord = normalizeWordForStorage(rawWord);
+          currentWords.push(normalizedWord);
           const learningUnitId = await this.upsertLearningUnit({
             word: normalizedWord,
             categoryId,
@@ -124,6 +126,13 @@ export class DemoContentSeedService implements OnModuleInit {
             selectedWordCardIds.push(wordCardId);
           }
         }
+
+        // Eliminar tarjetas obsoletas (palabras que ya no están en el seed)
+        await this.wordCardsCollection().deleteMany({
+          student_id: student._id as Types.ObjectId,
+          category_id: categoryId,
+          word: { $nin: currentWords },
+        });
       }
 
       await this.seedProgressLogs(student._id as Types.ObjectId, selectedWordCardIds);
@@ -273,28 +282,16 @@ export class DemoContentSeedService implements OnModuleInit {
     const timesShown = status === 'completed' ? 3 : input.orderIndex;
     const completedAt = status === 'completed' ? now : undefined;
 
-    const updateDoc: Record<string, unknown> = {
-      $set: {
-        initial_letter: initialLetterFromNormalizedWord(input.word),
-        audio_url: `https://demo.lectura.local/audio/${input.categorySlug}/${input.word}.mp3`,
-        category_id: input.categoryId,
-        learning_unit_id: input.learningUnitId,
-        status,
-        language: 'es',
-        times_audio_played: 0,
-        times_shown: timesShown,
-        updated_at: now,
-      },
-      $setOnInsert: {
-        student_id: input.studentId,
-        word: input.word,
-        created_at: now,
-      },
+    const setOnInsert: Record<string, unknown> = {
+      student_id: input.studentId,
+      word: input.word,
+      status,
+      times_shown: timesShown,
+      times_audio_played: 0,
+      created_at: now,
     };
     if (completedAt) {
-      (updateDoc.$set as Record<string, unknown>).completed_at = completedAt;
-    } else {
-      updateDoc.$unset = { completed_at: '' };
+      setOnInsert.completed_at = completedAt;
     }
 
     await this.wordCardsCollection().updateOne(
@@ -302,7 +299,17 @@ export class DemoContentSeedService implements OnModuleInit {
         student_id: input.studentId,
         word: input.word,
       },
-      updateDoc,
+      {
+        $set: {
+          initial_letter: initialLetterFromNormalizedWord(input.word),
+          audio_url: `https://demo.lectura.local/audio/${input.categorySlug}/${input.word}.mp3`,
+          category_id: input.categoryId,
+          learning_unit_id: input.learningUnitId,
+          language: 'es',
+          updated_at: now,
+        },
+        $setOnInsert: setOnInsert,
+      },
       { upsert: true },
     );
 
