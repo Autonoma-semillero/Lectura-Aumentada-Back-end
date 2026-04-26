@@ -120,6 +120,7 @@ export class DailyPlansService {
     const existing = await this.dailyPlansRepository.findByStudentAndPlanDate(
       dto.student_id,
       today,
+      categoryId,
     );
 
     let plan: DomanDailyPlan;

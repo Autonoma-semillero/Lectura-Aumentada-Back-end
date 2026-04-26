@@ -58,14 +58,19 @@ export class DailyPlansRepository implements IDailyPlansRepository {
   async findByStudentAndPlanDate(
     studentId: string,
     planDateUtcMidnight: Date,
+    categoryId?: string,
   ): Promise<DomanDailyPlan | null> {
     if (!Types.ObjectId.isValid(studentId)) {
       return null;
     }
-    const doc = await this.coll().findOne({
+    const filter: Record<string, unknown> = {
       student_id: new Types.ObjectId(studentId),
       plan_date: planDateUtcMidnight,
-    });
+    };
+    if (categoryId && Types.ObjectId.isValid(categoryId)) {
+      filter.category_id = new Types.ObjectId(categoryId);
+    }
+    const doc = await this.coll().findOne(filter);
     return doc ? this.toEntity(doc) : null;
   }
 
