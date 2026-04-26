@@ -106,10 +106,9 @@ export class WordCardsService {
     if (!cat) {
       throw new NotFoundException('Category not found');
     }
-    const audioUrl = dto.audio_url.trim();
-    if (!audioUrl) {
-      throw new BadRequestException('audio_url is required');
-    }
+    const audioTrim =
+      dto.audio_url !== undefined ? dto.audio_url.trim() : undefined;
+    const audioUrl = audioTrim === '' ? undefined : audioTrim;
     const status = dto.status ?? 'new';
     const langTrim =
       dto.language !== undefined ? dto.language.trim() : undefined;

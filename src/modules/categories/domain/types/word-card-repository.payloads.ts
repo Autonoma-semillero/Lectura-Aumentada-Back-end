@@ -4,7 +4,7 @@ export interface WordCardInsertPayload {
   studentId: string;
   word: string;
   initialLetter: string;
-  audioUrl: string;
+  audioUrl?: string;
   categoryId: string;
   status: WordCardStatus;
   language?: string;

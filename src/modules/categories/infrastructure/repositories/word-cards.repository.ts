@@ -129,7 +129,6 @@ export class WordCardsRepository implements IWordCardsRepository {
       student_id: new Types.ObjectId(payload.studentId),
       word: payload.word,
       initial_letter: payload.initialLetter,
-      audio_url: payload.audioUrl,
       category_id: new Types.ObjectId(payload.categoryId),
       status: payload.status,
       times_shown: 0,
@@ -137,6 +136,9 @@ export class WordCardsRepository implements IWordCardsRepository {
       created_at: now,
       updated_at: now,
     };
+    if (payload.audioUrl !== undefined && payload.audioUrl !== '') {
+      doc.audio_url = payload.audioUrl;
+    }
     if (payload.language !== undefined && payload.language !== '') {
       doc.language = payload.language;
     }
