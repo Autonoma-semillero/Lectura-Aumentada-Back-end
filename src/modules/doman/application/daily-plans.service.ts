@@ -327,7 +327,7 @@ export class DailyPlansService {
       (error.code === 11000 || error.code === 11001)
     ) {
       throw new ConflictException(
-        'A daily plan already exists for this student and plan_date',
+        'A daily plan already exists for this student, plan_date and category',
       );
     }
   }
