@@ -19,4 +19,5 @@ export default registerAs('env', () => ({
   demoTeacherPassword: process.env.DEMO_TEACHER_PASSWORD ?? 'Lectura123!',
   demoTeacherDisplayName:
     process.env.DEMO_TEACHER_DISPLAY_NAME ?? 'Demo Teacher',
+  uploadsDir: process.env.UPLOADS_DIR ?? 'uploads',
 }));
