@@ -10,7 +10,9 @@
     "start:dev": "nest start --watch",
     "start:prod": "node dist/main",
     "lint": "eslint \"src/**/*.ts\" --fix",
-    "vercel-build": "npm run build"
+    "vercel-build": "npm run build",
+    "demo:reset": "node scripts/reset-demo.js",
+    "demo:audio": "node scripts/set-audio-urls.js"
   },
   "engines": {
     "node": ">=20"
