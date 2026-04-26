@@ -12,6 +12,7 @@ type DemoCategorySeed = {
   name: string;
   slug: string;
   description: string;
+  icon: string;
   words: string[];
 };
 
@@ -25,30 +26,35 @@ const DEMO_CATEGORIES: DemoCategorySeed[] = [
     name: 'Animales',
     slug: 'animales',
     description: 'Palabras sobre animales cercanos y faciles de reconocer.',
+    icon: 'pets',
     words: ['gato', 'perro', 'pato', 'vaca', 'caballo'],
   },
   {
     name: 'Familia',
     slug: 'familia',
     description: 'Vocabulario basico de los integrantes de la familia.',
+    icon: 'brush',
     words: ['mama', 'papa', 'bebe', 'abuelo', 'hermana'],
   },
   {
     name: 'Cocina',
     slug: 'cocina',
     description: 'Objetos y alimentos cotidianos de la cocina.',
+    icon: 'restaurant',
     words: ['pan', 'leche', 'queso', 'sopa', 'arroz'],
   },
   {
     name: 'Naturaleza',
     slug: 'naturaleza',
     description: 'Elementos del entorno natural para lectura inicial.',
+    icon: 'rocket_launch',
     words: ['arbol', 'flor', 'nube', 'sol', 'luna'],
   },
   {
     name: 'Juguetes',
     slug: 'juguetes',
     description: 'Palabras de juego para una practica mas divertida.',
+    icon: 'sports_soccer',
     words: ['pelota', 'tren', 'carro', 'trompo', 'bloques'],
   },
 ];
@@ -158,6 +164,7 @@ export class DemoContentSeedService implements OnModuleInit {
           name: category.name,
           slug: category.slug,
           description: category.description,
+          icon: category.icon,
           sort_order: sortOrder,
           updated_at: now,
         },
