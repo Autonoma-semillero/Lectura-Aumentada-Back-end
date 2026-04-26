@@ -29,9 +29,14 @@ export interface DomanSessionPatchPayload {
 export interface IDomanSessionsRepository {
   findById(id: string): Promise<DomanSession | null>;
   findByDailyPlanId(dailyPlanId: string): Promise<DomanSession[]>;
+  findByStudentAndStatuses(
+    studentId: string,
+    statuses: DomanSessionStatus[],
+  ): Promise<DomanSession[]>;
   create(payload: DomanSessionInsertPayload): Promise<DomanSession>;
   update(
     id: string,
     patch: DomanSessionPatchPayload,
   ): Promise<DomanSession | null>;
+  deleteByDailyPlanId(dailyPlanId: string): Promise<void>;
 }

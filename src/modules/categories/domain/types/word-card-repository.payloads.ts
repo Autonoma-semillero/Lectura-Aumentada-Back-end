@@ -20,3 +20,11 @@ export interface WordCardPatchPayload {
   language?: string;
   learningUnitId?: string;
 }
+
+export interface WordCardExposurePatchPayload {
+  lastShownAt?: Date;
+  completedAt?: Date | null;
+  timesShownIncrement?: number;
+  timesAudioPlayedIncrement?: number;
+  status?: WordCardStatus;
+}

@@ -76,6 +76,25 @@ export class DomanSessionsRepository implements IDomanSessionsRepository {
       .filter((e): e is DomanSession => e !== null);
   }
 
+  async findByStudentAndStatuses(
+    studentId: string,
+    statuses: DomanSessionStatus[],
+  ): Promise<DomanSession[]> {
+    if (!Types.ObjectId.isValid(studentId) || statuses.length === 0) {
+      return [];
+    }
+    const docs = await this.coll()
+      .find({
+        student_id: new Types.ObjectId(studentId),
+        status: { $in: statuses },
+      })
+      .sort({ updated_at: -1, session_index: 1 })
+      .toArray();
+    return docs
+      .map((d) => this.toEntity(d))
+      .filter((e): e is DomanSession => e !== null);
+  }
+
   async create(payload: DomanSessionInsertPayload): Promise<DomanSession> {
     const now = new Date();
     const doc: Document = {
@@ -138,5 +157,12 @@ export class DomanSessionsRepository implements IDomanSessionsRepository {
     await this.coll().updateOne({ _id: oid }, { $set });
     const doc = await this.coll().findOne({ _id: oid });
     return doc ? this.toEntity(doc) : null;
+  }
+
+  async deleteByDailyPlanId(dailyPlanId: string): Promise<void> {
+    if (!Types.ObjectId.isValid(dailyPlanId)) {
+      return;
+    }
+    await this.coll().deleteMany({ daily_plan_id: new Types.ObjectId(dailyPlanId) });
   }
 }
