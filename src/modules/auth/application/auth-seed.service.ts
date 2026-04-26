@@ -1,7 +1,6 @@
 import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import type { Collection } from 'mongodb';
-import type { Document } from 'mongodb';
+import type { Collection, Document } from 'mongodb';
 import { Connection } from 'mongoose';
 import { MONGO_CONNECTION } from '../../../database/mongodb.providers';
 import { hashPassword } from '../domain/password.util';
@@ -43,6 +42,19 @@ export class AuthSeedService implements OnModuleInit {
         'Demo Student',
       roles: ['student'],
       label: 'student',
+    });
+    await this.upsertDemoUser(users, {
+      email:
+        this.configService.get<string>('env.demoStudentTwoEmail') ??
+        'student2@lectura.app',
+      password:
+        this.configService.get<string>('env.demoStudentTwoPassword') ??
+        'Lectura123!',
+      displayName:
+        this.configService.get<string>('env.demoStudentTwoDisplayName') ??
+        'Demo Student 2',
+      roles: ['student'],
+      label: 'student-2',
     });
     await this.upsertDemoUser(users, {
       email:

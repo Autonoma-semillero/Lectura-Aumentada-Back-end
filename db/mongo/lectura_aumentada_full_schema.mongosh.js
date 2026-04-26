@@ -291,7 +291,7 @@ ensureCollection('doman_exposure_logs', {
       student_id: { bsonType: 'objectId' },
       session_id: { bsonType: 'objectId' },
       word_card_id: { bsonType: 'objectId' },
-      event_type: { enum: ['card_shown', 'audio_played', 'session_completed'] },
+      event_type: { enum: ['card_shown', 'card_completed', 'card_skipped', 'audio_played', 'session_finished', 'session_completed'] },
       event_ts: { bsonType: 'date' },
       display_ms: { bsonType: 'int', minimum: 0 },
       device: { bsonType: 'string' },
@@ -366,3 +366,5 @@ print(
   'lectura_aumentada_full_schema: 10 colecciones (5 núcleo + 5 doman) e índices aplicados.',
 );
 print(`reference_time=${now.toISOString()}`);
+
+
