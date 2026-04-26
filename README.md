@@ -14,8 +14,8 @@ El backend expone una API REST en NestJS para:
 - registro de progreso de estudiantes,
 - soporte de sesiones para clientes móviles y web.
 
-Este estado del proyecto es un **scaffold arquitectónico**: estructura, interfaces, DTOs y placeholders.  
-No incluye lógica de negocio final ni queries reales a base de datos.
+Este repositorio ya expone una base funcional para el MVP de Lectura Aumentada: autenticación, temáticas, tarjetas Doman, progreso general y flujo Doman de plan diario, sesiones y exposiciones.
+La implementación sigue creciendo, pero ya no es solo scaffold.
 
 ## 2. Contexto de arquitectura de sistema
 
@@ -439,3 +439,4 @@ Cuando se modifiquen campos:
 ---
 
 Este documento define el contexto del proyecto. Las **reglas ejecutables** para que humanos e IA no diverjan en arquitectura están en [`AGENTS.md`](./AGENTS.md) y en `.cursor/rules/lectura-aumentada-architecture.mdc`.
+
