@@ -9,4 +9,8 @@ export default registerAs('env', () => ({
   demoStudentPassword: process.env.DEMO_STUDENT_PASSWORD ?? 'Lectura123!',
   demoStudentDisplayName:
     process.env.DEMO_STUDENT_DISPLAY_NAME ?? 'Demo Student',
+  demoTeacherEmail: process.env.DEMO_TEACHER_EMAIL ?? 'teacher@lectura.app',
+  demoTeacherPassword: process.env.DEMO_TEACHER_PASSWORD ?? 'Lectura123!',
+  demoTeacherDisplayName:
+    process.env.DEMO_TEACHER_DISPLAY_NAME ?? 'Demo Teacher',
 }));

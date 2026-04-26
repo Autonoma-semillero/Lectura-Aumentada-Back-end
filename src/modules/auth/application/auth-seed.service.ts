@@ -1,5 +1,6 @@
 import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import type { Collection } from 'mongodb';
 import type { Document } from 'mongodb';
 import { Connection } from 'mongoose';
 import { MONGO_CONNECTION } from '../../../database/mongodb.providers';
@@ -24,31 +25,63 @@ export class AuthSeedService implements OnModuleInit {
       return;
     }
 
-    const email =
-      this.configService.get<string>('env.demoStudentEmail') ?? 'student@lectura.app';
-    const password =
-      this.configService.get<string>('env.demoStudentPassword') ?? 'Lectura123!';
-    const displayName =
-      this.configService.get<string>('env.demoStudentDisplayName') ?? 'Demo Student';
-
     const db = this.connection.db;
     if (!db) {
       throw new Error('MongoDB connection is not ready');
     }
 
     const users = db.collection<Document>('users');
-    const existing = await users.findOne({ email: email.toLowerCase() });
+    await this.upsertDemoUser(users, {
+      email:
+        this.configService.get<string>('env.demoStudentEmail') ??
+        'student@lectura.app',
+      password:
+        this.configService.get<string>('env.demoStudentPassword') ??
+        'Lectura123!',
+      displayName:
+        this.configService.get<string>('env.demoStudentDisplayName') ??
+        'Demo Student',
+      roles: ['student'],
+      label: 'student',
+    });
+    await this.upsertDemoUser(users, {
+      email:
+        this.configService.get<string>('env.demoTeacherEmail') ??
+        'teacher@lectura.app',
+      password:
+        this.configService.get<string>('env.demoTeacherPassword') ??
+        'Lectura123!',
+      displayName:
+        this.configService.get<string>('env.demoTeacherDisplayName') ??
+        'Demo Teacher',
+      roles: ['teacher'],
+      label: 'teacher',
+    });
+  }
+
+  private async upsertDemoUser(
+    users: Collection<Document>,
+    input: {
+      email: string;
+      password: string;
+      displayName: string;
+      roles: string[];
+      label: string;
+    },
+  ): Promise<void> {
+    const email = input.email.toLowerCase();
+    const existing = await users.findOne({ email });
     if (existing) {
       return;
     }
 
     const now = new Date();
     await users.insertOne({
-      email: email.toLowerCase(),
-      display_name: displayName,
-      roles: ['student'],
+      email,
+      display_name: input.displayName,
+      roles: input.roles,
       status: 'active',
-      password_hash: hashPassword(password),
+      password_hash: hashPassword(input.password),
       metadata: {
         seeded_by: 'AuthSeedService',
       },
@@ -56,6 +89,6 @@ export class AuthSeedService implements OnModuleInit {
       updated_at: now,
     });
 
-    this.logger.log(`Seeded demo student user: ${email.toLowerCase()}`);
+    this.logger.log(`Seeded demo ${input.label} user: ${email}`);
   }
 }
