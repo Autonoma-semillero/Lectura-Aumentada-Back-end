@@ -73,14 +73,12 @@ export class DomanSessionsService {
     const plan = await this.dailyPlansRepository.findByStudentAndPlanDate(
       query.student_id,
       today,
-      query.category_id,
     );
     if (!plan) {
-      throw new NotFoundException(
-        query.category_id
-          ? 'No daily plan found for the requested category'
-          : 'No daily plan found for today',
-      );
+      throw new NotFoundException('No daily plan found for today');
+    }
+    if (query.category_id && plan.category_id !== query.category_id) {
+      throw new NotFoundException('No daily plan found for the requested category');
     }
     const sessions = await this.sessionsRepository.findByDailyPlanId(plan.id);
     const nextSession =

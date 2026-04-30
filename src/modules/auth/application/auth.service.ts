@@ -1,7 +1,12 @@
 import { Inject, Injectable, UnauthorizedException } from '@nestjs/common';
 import { AUTH_REPOSITORY } from '../domain/constants/auth.tokens';
 import { IAuthRepository } from '../domain/interfaces/auth.repository.interface';
-import { AuthPayload, AuthTokens, LoginResult } from '../domain/types/auth.types';
+import { SessionUser } from '../domain/types/auth.types';
+import {
+  AuthTokensResponseDto,
+  LoginResponseDto,
+  SessionUserResponseDto,
+} from '../dto/login-response.dto';
 import { LoginDto } from '../dto/login.dto';
 import { RefreshTokenDto } from '../dto/refresh-token.dto';
 
@@ -15,13 +20,13 @@ export class AuthService {
     private readonly authRepository: IAuthRepository,
   ) {}
 
-  async login(dto: LoginDto): Promise<LoginResult> {
+  async login(dto: LoginDto): Promise<LoginResponseDto> {
     const user = await this.authRepository.validateUser(dto.email, dto.password);
     if (!user) {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    const payload: AuthPayload = {
+    const payload = {
       userId: user.id,
       email: user.email,
       role: resolvePrimaryRole(user.roles),
@@ -31,20 +36,30 @@ export class AuthService {
 
     return {
       accessToken: tokens.accessToken,
-      user,
+      user: this.mapSessionUserToDto(user),
     };
   }
 
-  async refresh(_dto: RefreshTokenDto): Promise<AuthTokens> {
+  async refresh(_dto: RefreshTokenDto): Promise<AuthTokensResponseDto> {
     throw new UnauthorizedException('Refresh token flow is not available yet');
   }
 
-  async logout(token: string): Promise<void> {
-    await this.authRepository.revokeSession(token);
+  async logout(accessJti: string): Promise<void> {
+    await this.authRepository.revokeSessionByAccessJti(accessJti);
+  }
+
+  private mapSessionUserToDto(user: SessionUser): SessionUserResponseDto {
+    return {
+      id: user.id,
+      email: user.email,
+      display_name: user.display_name,
+      roles: user.roles,
+      status: user.status,
+    };
   }
 }
 
-function resolvePrimaryRole(roles: string[]): AuthPayload['role'] {
+function resolvePrimaryRole(roles: string[]): 'student' | 'teacher' | 'admin' {
   if (roles.includes('admin')) {
     return 'admin';
   }

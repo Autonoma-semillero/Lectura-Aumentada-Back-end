@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import type { Document } from 'mongodb';
 import { Connection, Types } from 'mongoose';
 import { MONGO_CONNECTION } from '../../../../database/mongodb.providers';
@@ -16,6 +16,8 @@ import {
 
 @Injectable()
 export class DomanSessionsRepository implements IDomanSessionsRepository {
+  private readonly logger = new Logger(DomanSessionsRepository.name);
+
   constructor(
     @Inject(MONGO_CONNECTION) private readonly connection: Connection,
   ) {}
@@ -35,6 +37,10 @@ export class DomanSessionsRepository implements IDomanSessionsRepository {
   private toEntity(doc: Document): DomanSession | null {
     const cat = doc.category_id as Types.ObjectId | undefined;
     if (!cat) {
+      const id = (doc._id as Types.ObjectId | undefined)?.toHexString();
+      this.logger.warn(
+        `doman_sessions document missing category_id${id ? ` (_id=${id})` : ''}`,
+      );
       return null;
     }
     const _id = doc._id as Types.ObjectId;

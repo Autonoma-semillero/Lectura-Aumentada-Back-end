@@ -6,7 +6,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { MongoServerError } from 'mongodb';
-import { Types } from 'mongoose';
+import { isMongoObjectId } from '../../../common/utils/object-id';
 import { CategoriesService } from '../../categories/application/categories.service';
 import { WORD_CARDS_REPOSITORY } from '../../categories/domain/constants/categories.tokens';
 import { WordCardListed } from '../../categories/domain/interfaces/word-card-listed.interface';
@@ -41,7 +41,7 @@ export class DailyPlansService {
   ) {}
 
   async list(query: ListDailyPlansQueryDto): Promise<DomanDailyPlan[]> {
-    if (!Types.ObjectId.isValid(query.student_id)) {
+    if (!isMongoObjectId(query.student_id)) {
       throw new BadRequestException('Invalid student_id');
     }
     const to = query.to
@@ -61,7 +61,7 @@ export class DailyPlansService {
   }
 
   async getById(id: string): Promise<DomanDailyPlan> {
-    if (!Types.ObjectId.isValid(id)) {
+    if (!isMongoObjectId(id)) {
       throw new BadRequestException('Invalid daily plan id');
     }
     const plan = await this.dailyPlansRepository.findById(id);
@@ -72,7 +72,7 @@ export class DailyPlansService {
   }
 
   async getToday(studentId: string): Promise<unknown> {
-    if (!Types.ObjectId.isValid(studentId)) {
+    if (!isMongoObjectId(studentId)) {
       throw new BadRequestException('Invalid student_id');
     }
     const today = planDateToUtcMidnight(new Date().toISOString().slice(0, 10));
@@ -93,7 +93,7 @@ export class DailyPlansService {
   }
 
   async generate(dto: GenerateDailyPlanDto): Promise<unknown> {
-    if (!Types.ObjectId.isValid(dto.student_id)) {
+    if (!isMongoObjectId(dto.student_id)) {
       throw new BadRequestException('Invalid student_id');
     }
     const today = planDateToUtcMidnight(new Date().toISOString().slice(0, 10));
@@ -120,7 +120,6 @@ export class DailyPlansService {
     const existing = await this.dailyPlansRepository.findByStudentAndPlanDate(
       dto.student_id,
       today,
-      categoryId,
     );
 
     let plan: DomanDailyPlan;
@@ -171,7 +170,7 @@ export class DailyPlansService {
   }
 
   async delete(id: string): Promise<void> {
-    if (!Types.ObjectId.isValid(id)) {
+    if (!isMongoObjectId(id)) {
       throw new BadRequestException('Invalid daily plan id');
     }
     const plan = await this.dailyPlansRepository.findById(id);
@@ -343,7 +342,7 @@ export class DailyPlansService {
       (error.code === 11000 || error.code === 11001)
     ) {
       throw new ConflictException(
-        'A daily plan already exists for this student, plan_date and category',
+        'A daily plan already exists for this student and plan_date',
       );
     }
   }

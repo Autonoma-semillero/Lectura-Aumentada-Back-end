@@ -134,14 +134,14 @@ export class XxxModule {}
 - Conexión compartida: token **`MONGO_CONNECTION`** (`src/database/mongodb.providers.ts`). Solo los **repositorios** lo inyectan.
 - **Fuente canónica del esquema:** `db/mongo/lectura_aumentada_full_schema.mongosh.js` (validadores + índices). Los schemas Mongoose del código deben reflejar los mismos nombres de colección y campos.
 - Cambios de esquema en PR: actualizar ese script **y** documentar en `docs/origen/Arquitectura/db/` (ej. `US-BE-F1-01-categories.md`). Vocabulario Jira ↔ Mongo: **README §2.1**.
-- Colecciones Doman (fase 1): repositorios de **`doman_daily_plans`** / **`doman_sessions`** en `src/modules/doman/`; otros documentos Doman pueden seguir en `src/database/doman.schemas.ts` hasta tener módulo propio.
+- Colecciones Doman (fase 1): repositorios de **`doman_daily_plans`** / **`doman_sessions`** en `src/modules/doman/`; el contrato canónico vive en el script Mongo; no mantener schemas Mongoose duplicados fuera de `src/modules/*/infrastructure/schemas` salvo decisión explícita en PR.
 - Nombres de campos persistidos en **inglés**, como en el script (p. ej. `learning_units.word`, `progress_logs.user_id`).
 
 ---
 
 ## 9. Autenticación y rutas públicas
 
-- Guard JWT (cuando esté activo) y decorador **`@Public()`** (`src/common/decorators/public.decorator.ts`): los endpoints de login/refresh u otros públicos deben marcarse según la estrategia del proyecto; no duplicar lógica de token fuera del módulo `auth` salvo guards compartidos en `common/guards/`.
+- Guard JWT global (`JwtAuthGuard`) y decorador **`@Public()`** (`src/common/decorators/public.decorator.ts`): marcar explícitamente login/refresh/health u otros públicos; no duplicar lógica de token fuera del módulo `auth` salvo guards compartidos en `common/guards/`.
 
 ---
 
@@ -160,6 +160,13 @@ export class XxxModule {}
 - [ ] Si implica persistencia: método en `I*Repository` + implementación en repositorio.
 - [ ] Cambios en schema + interface de dominio coherentes.
 - [ ] Módulo exporta solo lo necesario (normalmente el servicio).
+
+## 11.1 Checklist antes de mergear (remediación auditoría)
+
+- [ ] `npm run lint:ci`, `npm run typecheck`, `npm run build`, `npm test`, `npm run test:e2e` en verde (e2e requiere Mongo y `JWT_SECRET` ≥ 32).
+- [ ] Endpoints nuevos protegidos por JWT salvo `@Public()` explícito.
+- [ ] Sin `password_hash` ni tokens en claro en respuestas ni en `sessions.client_metadata`.
+- [ ] Cambios de validador Mongo documentados en `docs/origen/Arquitectura/db/`.
 
 ---
 

@@ -7,15 +7,15 @@ import { ListProgressQueryDto } from '../dto/list-progress-query.dto';
 @ApiTags('progress')
 @Controller('progress')
 export class ProgressController {
-  constructor(private readonly service: ProgressService) {}
+  constructor(private readonly progressService: ProgressService) {}
 
   @Get()
   async list(@Query() query: ListProgressQueryDto): Promise<unknown> {
-    return this.service.listByUser(query.user_id ?? '');
+    return this.progressService.listByUser(query.user_id ?? '');
   }
 
   @Post()
   async create(@Body() dto: CreateProgressLogDto): Promise<unknown> {
-    return this.service.create(dto);
+    return this.progressService.create(dto);
   }
 }

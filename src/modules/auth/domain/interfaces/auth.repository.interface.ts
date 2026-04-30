@@ -5,7 +5,7 @@ import { AuthPayload, AuthTokens, SessionUser } from '../types/auth.types';
  */
 export interface IAuthRepository {
   validateUser(email: string, password: string): Promise<SessionUser | null>;
-  createSession(userId: string, token: string): Promise<void>;
-  revokeSession(token: string): Promise<void>;
+  createSession(userId: string, accessToken: string): Promise<void>;
+  revokeSessionByAccessJti(jti: string): Promise<void>;
   issueTokens(payload: AuthPayload): Promise<AuthTokens>;
 }

@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import type { Document } from 'mongodb';
 import { Connection, Types } from 'mongoose';
 import { MONGO_CONNECTION } from '../../../../database/mongodb.providers';
@@ -11,6 +11,8 @@ import {
 
 @Injectable()
 export class DailyPlansRepository implements IDailyPlansRepository {
+  private readonly logger = new Logger(DailyPlansRepository.name);
+
   constructor(
     @Inject(MONGO_CONNECTION) private readonly connection: Connection,
   ) {}
@@ -30,6 +32,10 @@ export class DailyPlansRepository implements IDailyPlansRepository {
   private toEntity(doc: Document): DomanDailyPlan | null {
     const cat = doc.category_id as Types.ObjectId | undefined;
     if (!cat) {
+      const id = (doc._id as Types.ObjectId | undefined)?.toHexString();
+      this.logger.warn(
+        `doman_daily_plans document missing category_id${id ? ` (_id=${id})` : ''}`,
+      );
       return null;
     }
     const _id = doc._id as Types.ObjectId;
@@ -58,19 +64,14 @@ export class DailyPlansRepository implements IDailyPlansRepository {
   async findByStudentAndPlanDate(
     studentId: string,
     planDateUtcMidnight: Date,
-    categoryId?: string,
   ): Promise<DomanDailyPlan | null> {
     if (!Types.ObjectId.isValid(studentId)) {
       return null;
     }
-    const filter: Record<string, unknown> = {
+    const doc = await this.coll().findOne({
       student_id: new Types.ObjectId(studentId),
       plan_date: planDateUtcMidnight,
-    };
-    if (categoryId && Types.ObjectId.isValid(categoryId)) {
-      filter.category_id = new Types.ObjectId(categoryId);
-    }
-    const doc = await this.coll().findOne(filter);
+    });
     return doc ? this.toEntity(doc) : null;
   }
 

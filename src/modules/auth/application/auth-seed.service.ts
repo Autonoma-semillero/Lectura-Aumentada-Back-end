@@ -76,7 +76,7 @@ export class AuthSeedService implements OnModuleInit {
   ): Promise<void> {
     const created = await this.authSeedRepository.createDemoUserIfNotExists({
       email: input.email,
-      passwordHash: hashPassword(input.password),
+      passwordHash: await hashPassword(input.password),
       displayName: input.displayName,
       roles: input.roles,
     });

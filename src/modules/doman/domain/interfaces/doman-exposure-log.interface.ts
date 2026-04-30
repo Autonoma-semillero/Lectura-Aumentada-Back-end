@@ -3,7 +3,8 @@ export type DomanExposureEventType =
   | 'card_completed'
   | 'card_skipped'
   | 'audio_played'
-  | 'session_finished';
+  | 'session_finished'
+  | 'session_completed';
 
 export interface DomanExposureLog {
   id: string;
