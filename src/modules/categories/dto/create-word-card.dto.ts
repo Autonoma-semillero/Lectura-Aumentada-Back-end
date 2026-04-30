@@ -37,11 +37,10 @@ export class CreateWordCardDto {
     description: 'URL o ruta del audio asociado a la palabra.',
     example: 'https://cdn.example.com/audio/elefante.mp3',
   })
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  @MinLength(1)
   @MaxLength(2048)
-  audio_url!: string;
+  audio_url?: string;
 
   @ApiProperty({
     description:

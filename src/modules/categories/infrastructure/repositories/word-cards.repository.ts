@@ -3,6 +3,7 @@ import type { Document } from 'mongodb';
 import { Connection, Types } from 'mongoose';
 import { MONGO_CONNECTION } from '../../../../database/mongodb.providers';
 import {
+  WordCardExposurePatchPayload,
   WordCardInsertPayload,
   WordCardPatchPayload,
 } from '../../domain/types/word-card-repository.payloads';
@@ -98,6 +99,46 @@ export class WordCardsRepository implements IWordCardsRepository {
     return docs.map((d) => this.toListed(d));
   }
 
+  async listByStudentAndStatuses(
+    studentId: string,
+    statuses: string[],
+  ): Promise<WordCardListed[]> {
+    if (!Types.ObjectId.isValid(studentId) || statuses.length === 0) {
+      return [];
+    }
+    const docs = await this.coll()
+      .find({
+        student_id: new Types.ObjectId(studentId),
+        status: { $in: statuses },
+      })
+      .sort({ times_shown: 1, created_at: 1, word: 1 })
+      .toArray();
+    return docs.map((d) => this.toListed(d));
+  }
+
+  async listByStudentCategoryAndStatuses(
+    studentId: string,
+    categoryId: string,
+    statuses: string[],
+  ): Promise<WordCardListed[]> {
+    if (
+      !Types.ObjectId.isValid(studentId) ||
+      !Types.ObjectId.isValid(categoryId) ||
+      statuses.length === 0
+    ) {
+      return [];
+    }
+    const docs = await this.coll()
+      .find({
+        student_id: new Types.ObjectId(studentId),
+        category_id: new Types.ObjectId(categoryId),
+        status: { $in: statuses },
+      })
+      .sort({ times_shown: 1, created_at: 1, word: 1 })
+      .toArray();
+    return docs.map((d) => this.toListed(d));
+  }
+
   async countWordCardsByCategoryForStudent(
     studentId: string,
   ): Promise<{ categoryId: string; count: number }[]> {
@@ -111,6 +152,7 @@ export class WordCardsRepository implements IWordCardsRepository {
           $match: {
             student_id: sid,
             category_id: { $exists: true, $nin: [null] },
+            status: { $in: ['new', 'active', 'completed'] },
           },
         },
         { $group: { _id: '$category_id', count: { $sum: 1 } } },
@@ -129,7 +171,6 @@ export class WordCardsRepository implements IWordCardsRepository {
       student_id: new Types.ObjectId(payload.studentId),
       word: payload.word,
       initial_letter: payload.initialLetter,
-      audio_url: payload.audioUrl,
       category_id: new Types.ObjectId(payload.categoryId),
       status: payload.status,
       times_shown: 0,
@@ -137,6 +178,9 @@ export class WordCardsRepository implements IWordCardsRepository {
       created_at: now,
       updated_at: now,
     };
+    if (payload.audioUrl !== undefined && payload.audioUrl !== '') {
+      doc.audio_url = payload.audioUrl;
+    }
     if (payload.language !== undefined && payload.language !== '') {
       doc.language = payload.language;
     }
@@ -186,6 +230,54 @@ export class WordCardsRepository implements IWordCardsRepository {
       $set.learning_unit_id = new Types.ObjectId(patch.learningUnitId);
     }
     await this.coll().updateOne({ _id: oid }, { $set });
+    const doc = await this.coll().findOne({ _id: oid });
+    return doc ? this.toListed(doc) : null;
+  }
+
+  async applyExposure(
+    id: string,
+    patch: WordCardExposurePatchPayload,
+  ): Promise<WordCardListed | null> {
+    if (!Types.ObjectId.isValid(id)) {
+      return null;
+    }
+    const oid = new Types.ObjectId(id);
+    const existing = await this.coll().findOne({ _id: oid });
+    if (!existing) {
+      return null;
+    }
+    const $set: Record<string, unknown> = { updated_at: new Date() };
+    const $inc: Record<string, number> = {};
+    const $unset: Record<string, ''> = {};
+    if (patch.lastShownAt !== undefined) {
+      $set.last_shown_at = patch.lastShownAt;
+    }
+    if (patch.completedAt !== undefined) {
+      if (patch.completedAt === null) {
+        $unset.completed_at = '';
+      } else {
+        $set.completed_at = patch.completedAt;
+      }
+    }
+    if (patch.status !== undefined) {
+      $set.status = patch.status;
+    }
+    if (patch.timesShownIncrement !== undefined) {
+      $inc.times_shown = patch.timesShownIncrement;
+    }
+    if (patch.timesAudioPlayedIncrement !== undefined) {
+      $inc.times_audio_played = patch.timesAudioPlayedIncrement;
+    }
+
+    const updateDoc: Record<string, unknown> = { $set };
+    if (Object.keys($inc).length > 0) {
+      updateDoc.$inc = $inc;
+    }
+    if (Object.keys($unset).length > 0) {
+      updateDoc.$unset = $unset;
+    }
+
+    await this.coll().updateOne({ _id: oid }, updateDoc);
     const doc = await this.coll().findOne({ _id: oid });
     return doc ? this.toListed(doc) : null;
   }

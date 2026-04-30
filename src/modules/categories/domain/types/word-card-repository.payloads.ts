@@ -4,7 +4,7 @@ export interface WordCardInsertPayload {
   studentId: string;
   word: string;
   initialLetter: string;
-  audioUrl: string;
+  audioUrl?: string;
   categoryId: string;
   status: WordCardStatus;
   language?: string;
@@ -19,4 +19,12 @@ export interface WordCardPatchPayload {
   status?: WordCardStatus;
   language?: string;
   learningUnitId?: string;
+}
+
+export interface WordCardExposurePatchPayload {
+  lastShownAt?: Date;
+  completedAt?: Date | null;
+  timesShownIncrement?: number;
+  timesAudioPlayedIncrement?: number;
+  status?: WordCardStatus;
 }

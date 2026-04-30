@@ -6,7 +6,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { MongoServerError } from 'mongodb';
-import { Types } from 'mongoose';
+import { isMongoObjectId } from '../../../common/utils/object-id';
 import {
   CATEGORIES_REPOSITORY,
   WORD_CARDS_REPOSITORY,
@@ -40,7 +40,7 @@ export class CategoriesService {
   async findWithAvailableWordCardsForStudent(
     studentId: string,
   ): Promise<CategoryWithWordCardAvailability[]> {
-    if (!Types.ObjectId.isValid(studentId)) {
+    if (!isMongoObjectId(studentId)) {
       throw new BadRequestException('Invalid student_id');
     }
     const rows =
@@ -68,7 +68,7 @@ export class CategoriesService {
   }
 
   async findById(id: string): Promise<Category> {
-    if (!Types.ObjectId.isValid(id)) {
+    if (!isMongoObjectId(id)) {
       throw new BadRequestException('Invalid category id');
     }
     const c = await this.categoriesRepository.findById(id);
@@ -81,6 +81,7 @@ export class CategoriesService {
   async create(dto: CreateCategoryDto): Promise<Category> {
     const slug = this.normalizeSlug(dto.slug);
     const name = dto.name.trim();
+    const icon = dto.icon?.trim() || undefined;
     if (!name || !slug) {
       throw new BadRequestException('name and slug are required');
     }
@@ -100,6 +101,7 @@ export class CategoriesService {
         name,
         slug,
         description: dto.description?.trim(),
+        icon,
         parent_id: dto.parent_id,
         sort_order: sortOrder,
       });
@@ -132,6 +134,9 @@ export class CategoriesService {
     }
     if (dto.description !== undefined) {
       patch.description = dto.description.trim();
+    }
+    if (dto.icon !== undefined) {
+      patch.icon = dto.icon.trim() || undefined;
     }
     if (dto.sort_order !== undefined) {
       patch.sort_order = dto.sort_order;

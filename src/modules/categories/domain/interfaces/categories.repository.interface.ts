@@ -13,10 +13,11 @@ export interface ICategoriesRepository {
   maxSortOrder(parent: CategoryParentFilter): Promise<number>;
   create(
     payload: Pick<Category, 'name' | 'slug'> &
-      Partial<Pick<Category, 'description' | 'parent_id' | 'sort_order'>>,
+      Partial<Pick<Category, 'description' | 'icon' | 'parent_id' | 'sort_order'>>,
   ): Promise<Category>;
   update(id: string, payload: Partial<Category>): Promise<Category | null>;
   delete(id: string): Promise<boolean>;
   setSortOrders(orderedIds: string[], parent: CategoryParentFilter): Promise<void>;
   countIncomingReferences(categoryId: string): Promise<number>;
+  countWordCardsByCategory(): Promise<Map<string, number>>;
 }

@@ -65,6 +65,7 @@ ensureCollection('categories', {
       name: { bsonType: 'string', minLength: 1 },
       slug: { bsonType: 'string', minLength: 1 },
       description: { bsonType: 'string' },
+      icon: { bsonType: 'string' },
       parent_id: { bsonType: 'objectId' },
       sort_order: { bsonType: 'int' },
       created_at: { bsonType: 'date' },
@@ -216,6 +217,7 @@ ensureCollection('doman_daily_plans', {
       'plan_date',
       'target_cards_count',
       'target_sessions_count',
+      'category_id',
       'created_at',
       'updated_at',
     ],
@@ -241,6 +243,7 @@ ensureCollection('doman_sessions', {
       'student_id',
       'daily_plan_id',
       'session_index',
+      'category_id',
       'display_ms',
       'audio_mode',
       'status',
@@ -290,7 +293,7 @@ ensureCollection('doman_exposure_logs', {
       student_id: { bsonType: 'objectId' },
       session_id: { bsonType: 'objectId' },
       word_card_id: { bsonType: 'objectId' },
-      event_type: { enum: ['card_shown', 'audio_played', 'session_completed'] },
+      event_type: { enum: ['card_shown', 'card_completed', 'card_skipped', 'audio_played', 'session_finished', 'session_completed'] },
       event_ts: { bsonType: 'date' },
       display_ms: { bsonType: 'int', minimum: 0 },
       device: { bsonType: 'string' },
@@ -365,3 +368,5 @@ print(
   'lectura_aumentada_full_schema: 10 colecciones (5 núcleo + 5 doman) e índices aplicados.',
 );
 print(`reference_time=${now.toISOString()}`);
+
+

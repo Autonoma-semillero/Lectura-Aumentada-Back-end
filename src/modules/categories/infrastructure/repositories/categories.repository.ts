@@ -43,8 +43,10 @@ export class CategoriesRepository implements ICategoriesRepository {
       name: doc.name as string,
       slug: doc.slug as string,
       description: doc.description as string | undefined,
+      icon: doc.icon as string | undefined,
       parent_id: pid ? pid.toHexString() : undefined,
       sort_order: doc.sort_order as number | undefined,
+      word_cards_count: doc.word_cards_count as number | undefined,
       created_at: doc.created_at as Date,
       updated_at: doc.updated_at as Date,
     };
@@ -56,7 +58,14 @@ export class CategoriesRepository implements ICategoriesRepository {
       .find(q)
       .sort({ sort_order: 1, name: 1 })
       .toArray();
-    return docs.map((d) => this.toCategory(d));
+    const counts = await this.countWordCardsByCategory();
+    return docs.map((d) => {
+      const category = this.toCategory(d);
+      return {
+        ...category,
+        word_cards_count: counts.get(category.id) ?? 0,
+      };
+    });
   }
 
   async findById(id: string): Promise<Category | null> {
@@ -99,7 +108,7 @@ export class CategoriesRepository implements ICategoriesRepository {
 
   async create(
     payload: Pick<Category, 'name' | 'slug'> &
-      Partial<Pick<Category, 'description' | 'parent_id' | 'sort_order'>>,
+      Partial<Pick<Category, 'description' | 'icon' | 'parent_id' | 'sort_order'>>,
   ): Promise<Category> {
     const now = new Date();
     const doc: Record<string, unknown> = {
@@ -110,6 +119,9 @@ export class CategoriesRepository implements ICategoriesRepository {
     };
     if (payload.description !== undefined) {
       doc.description = payload.description;
+    }
+    if (payload.icon !== undefined) {
+      doc.icon = payload.icon;
     }
     if (payload.parent_id) {
       doc.parent_id = new Types.ObjectId(payload.parent_id);
@@ -143,6 +155,9 @@ export class CategoriesRepository implements ICategoriesRepository {
     }
     if (payload.description !== undefined) {
       $set.description = payload.description;
+    }
+    if (payload.icon !== undefined) {
+      $set.icon = payload.icon;
     }
     if (payload.sort_order !== undefined) {
       $set.sort_order = payload.sort_order;
@@ -205,5 +220,23 @@ export class CategoriesRepository implements ICategoriesRepository {
       .countDocuments({ category_id: oid });
     total += await db.collection('categories').countDocuments({ parent_id: oid });
     return total;
+  }
+
+  async countWordCardsByCategory(): Promise<Map<string, number>> {
+    const rows = await this.db()
+      .collection<Document>('doman_word_cards')
+      .aggregate<{ _id: Types.ObjectId; count: number }>([
+        {
+          $match: {
+            category_id: { $exists: true, $nin: [null] },
+          },
+        },
+        { $group: { _id: '$category_id', count: { $sum: 1 } } },
+      ])
+      .toArray();
+
+    return new Map(
+      rows.map((row) => [row._id.toHexString(), row.count] as const),
+    );
   }
 }

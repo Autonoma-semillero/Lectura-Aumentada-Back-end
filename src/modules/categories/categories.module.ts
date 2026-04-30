@@ -29,6 +29,7 @@ import { WordCardsController } from './presentation/word-cards.controller';
       useClass: WordCardsRepository,
     },
   ],
-  exports: [CategoriesService, WordCardsService],
+  exports: [CategoriesService, WordCardsService, CATEGORIES_REPOSITORY, WORD_CARDS_REPOSITORY],
 })
 export class CategoriesModule {}
+

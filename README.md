@@ -14,8 +14,8 @@ El backend expone una API REST en NestJS para:
 - registro de progreso de estudiantes,
 - soporte de sesiones para clientes móviles y web.
 
-Este estado del proyecto es un **scaffold arquitectónico**: estructura, interfaces, DTOs y placeholders.  
-No incluye lógica de negocio final ni queries reales a base de datos.
+Este repositorio ya expone una base funcional para el MVP de Lectura Aumentada: autenticación, temáticas, tarjetas Doman, progreso general y flujo Doman de plan diario, sesiones y exposiciones.
+La implementación sigue creciendo, pero ya no es solo scaffold.
 
 ## 2. Contexto de arquitectura de sistema
 
@@ -139,7 +139,7 @@ El esquema de base de datos vive en el script **`db/mongo/lectura_aumentada_full
 mongosh "mongodb://localhost:27017/lectura_aumentada_db" --file db/mongo/lectura_aumentada_full_schema.mongosh.js
 ```
 
-Los **schemas Mongoose** en `src/modules/*/infrastructure/schemas/` y `src/database/doman.schemas.ts` deben mantenerse alineados a ese script (nombres de colección y campos en inglés, como en el validador `$jsonSchema`).
+Los **schemas Mongoose** en `src/modules/*/infrastructure/schemas/` deben mantenerse alineados a ese script (nombres de colección y campos en inglés, como en el validador `$jsonSchema`).
 
 ### 7.1 Núcleo (AR / producto)
 
@@ -169,7 +169,7 @@ Relaciones conceptuales:
 | `doman_session_cards` |
 | `doman_exposure_logs` |
 
-Referencias de diseño citadas en el script: `docs/arquitectura/DB/Db_1.png`, `docs/agentic/db-fase1-doman.md`. Los tipos Mongoose de referencia siguen en **`src/database/doman.schemas.ts`** para modelos aún no cubiertos por repositorios. Planes y sesiones Doman con **`category_id`** persistido: módulo **`src/modules/doman/`** (ver §8.7). Tarjetas y temáticas: **`src/modules/categories/`** (`doman_word_cards.category_id` → `categories`).
+Referencias de diseño citadas en el script: `docs/arquitectura/DB/Db_1.png`, `docs/agentic/db-fase1-doman.md`. Planes y sesiones Doman con **`category_id`** persistido: módulo **`src/modules/doman/`** (ver §8.7). Tarjetas y temáticas: **`src/modules/categories/`** (`doman_word_cards.category_id` → `categories`).
 
 ### 7.3 Activos binarios
 
@@ -439,3 +439,4 @@ Cuando se modifiquen campos:
 ---
 
 Este documento define el contexto del proyecto. Las **reglas ejecutables** para que humanos e IA no diverjan en arquitectura están en [`AGENTS.md`](./AGENTS.md) y en `.cursor/rules/lectura-aumentada-architecture.mdc`.
+

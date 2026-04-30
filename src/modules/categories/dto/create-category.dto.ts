@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsMongoId, IsNumber, IsOptional, IsString, Max, Min, MinLength } from 'class-validator';
+import { IsMongoId, IsNumber, IsOptional, IsString, Max, MaxLength, Min, MinLength } from 'class-validator';
 
 export class CreateCategoryDto {
   @ApiProperty()
@@ -16,6 +16,12 @@ export class CreateCategoryDto {
   @IsOptional()
   @IsString()
   description?: string;
+
+  @ApiPropertyOptional({ example: 'restaurant' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  icon?: string;
 
   @ApiPropertyOptional({ description: 'ObjectId categoría padre' })
   @IsOptional()

@@ -36,6 +36,6 @@ Antes de editar `src/**/*.ts`, lee `AGENTS.md` en la raíz del repositorio.
 
 ## MongoDB
 
-- Esquema canónico: `db/mongo/lectura_aumentada_full_schema.mongosh.js`. Mongoose en `src/modules/*/infrastructure/schemas` y `src/database/doman.schemas.ts` debe coincidir con ese contrato.
+- Esquema canónico: `db/mongo/lectura_aumentada_full_schema.mongosh.js`. Mongoose en `src/modules/*/infrastructure/schemas` debe coincidir con ese contrato.
 - No hay colección `assets`; activos AR van en `learning_units.assets`.
 - **Temática = `categories`**. Tarjetas Doman enlazan con `doman_word_cards.category_id` (sin colección puente `theme_card_links`).

@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import type { Document } from 'mongodb';
 import { Connection, Types } from 'mongoose';
 import { MONGO_CONNECTION } from '../../../../database/mongodb.providers';
@@ -16,6 +16,8 @@ import {
 
 @Injectable()
 export class DomanSessionsRepository implements IDomanSessionsRepository {
+  private readonly logger = new Logger(DomanSessionsRepository.name);
+
   constructor(
     @Inject(MONGO_CONNECTION) private readonly connection: Connection,
   ) {}
@@ -35,6 +37,10 @@ export class DomanSessionsRepository implements IDomanSessionsRepository {
   private toEntity(doc: Document): DomanSession | null {
     const cat = doc.category_id as Types.ObjectId | undefined;
     if (!cat) {
+      const id = (doc._id as Types.ObjectId | undefined)?.toHexString();
+      this.logger.warn(
+        `doman_sessions document missing category_id${id ? ` (_id=${id})` : ''}`,
+      );
       return null;
     }
     const _id = doc._id as Types.ObjectId;
@@ -70,6 +76,25 @@ export class DomanSessionsRepository implements IDomanSessionsRepository {
     const docs = await this.coll()
       .find({ daily_plan_id: new Types.ObjectId(dailyPlanId) })
       .sort({ session_index: 1 })
+      .toArray();
+    return docs
+      .map((d) => this.toEntity(d))
+      .filter((e): e is DomanSession => e !== null);
+  }
+
+  async findByStudentAndStatuses(
+    studentId: string,
+    statuses: DomanSessionStatus[],
+  ): Promise<DomanSession[]> {
+    if (!Types.ObjectId.isValid(studentId) || statuses.length === 0) {
+      return [];
+    }
+    const docs = await this.coll()
+      .find({
+        student_id: new Types.ObjectId(studentId),
+        status: { $in: statuses },
+      })
+      .sort({ updated_at: -1, session_index: 1 })
       .toArray();
     return docs
       .map((d) => this.toEntity(d))
@@ -138,5 +163,12 @@ export class DomanSessionsRepository implements IDomanSessionsRepository {
     await this.coll().updateOne({ _id: oid }, { $set });
     const doc = await this.coll().findOne({ _id: oid });
     return doc ? this.toEntity(doc) : null;
+  }
+
+  async deleteByDailyPlanId(dailyPlanId: string): Promise<void> {
+    if (!Types.ObjectId.isValid(dailyPlanId)) {
+      return;
+    }
+    await this.coll().deleteMany({ daily_plan_id: new Types.ObjectId(dailyPlanId) });
   }
 }

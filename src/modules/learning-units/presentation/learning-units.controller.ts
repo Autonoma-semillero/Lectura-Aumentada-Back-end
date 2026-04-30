@@ -7,21 +7,21 @@ import { UpdateLearningUnitDto } from '../dto/update-learning-unit.dto';
 @ApiTags('learning-units')
 @Controller('learning-units')
 export class LearningUnitsController {
-  constructor(private readonly service: LearningUnitsService) {}
+  constructor(private readonly learningUnitsService: LearningUnitsService) {}
 
   @Get()
   async findAll(): Promise<unknown> {
-    return this.service.findAll();
+    return this.learningUnitsService.findAll();
   }
 
   @Get(':id')
   async findById(@Param('id') id: string): Promise<unknown> {
-    return this.service.findById(id);
+    return this.learningUnitsService.findById(id);
   }
 
   @Post()
   async create(@Body() dto: CreateLearningUnitDto): Promise<unknown> {
-    return this.service.create(dto);
+    return this.learningUnitsService.create(dto);
   }
 
   @Patch(':id')
@@ -29,6 +29,6 @@ export class LearningUnitsController {
     @Param('id') id: string,
     @Body() dto: UpdateLearningUnitDto,
   ): Promise<unknown> {
-    return this.service.update(id, dto);
+    return this.learningUnitsService.update(id, dto);
   }
 }
