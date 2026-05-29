@@ -10,6 +10,7 @@ import { MongoDbModule } from './database/mongodb.module';
 import { AssetsModule } from './modules/assets/assets.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { CategoriesModule } from './modules/categories/categories.module';
+import { DocenteModule } from './modules/docente/docente.module';
 import { DomanModule } from './modules/doman/doman.module';
 import { LearningUnitsModule } from './modules/learning-units/learning-units.module';
 import { ProgressModule } from './modules/progress/progress.module';
@@ -33,6 +34,7 @@ import { UsersModule } from './modules/users/users.module';
     AssetsModule,
     CategoriesModule,
     DomanModule,
+    DocenteModule,
     SeedingModule,
   ],
   providers: [
