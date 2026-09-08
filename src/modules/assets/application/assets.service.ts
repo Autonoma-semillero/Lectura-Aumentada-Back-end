@@ -15,8 +15,12 @@ export class AssetsService {
     return this.assetsRepository.findAll();
   }
 
-  async findByMarker(markerId: string): Promise<Asset | null> {
-    return this.assetsRepository.findByMarker(markerId);
+  async findByMarker(markerId: string): Promise<Asset> {
+    const asset = await this.assetsRepository.findByMarker(markerId);
+    if (!asset) {
+      throw new NotFoundException(`No assets found for marker ${markerId}`);
+    }
+    return asset;
   }
 
   async create(dto: CreateAssetDto): Promise<Asset> {
