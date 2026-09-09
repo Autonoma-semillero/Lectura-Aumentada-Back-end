@@ -18,7 +18,8 @@
     "test:e2e": "jest --config ./test/jest-e2e.json --runInBand --forceExit",
     "vercel-build": "npm run build",
     "demo:reset": "node scripts/reset-demo.js",
-    "demo:audio": "node scripts/set-audio-urls.js"
+    "demo:audio": "node scripts/set-audio-urls.js",
+    "demo:model:cat": "node scripts/set-demo-cat-model.js"
   },
   "engines": {
     "node": ">=20"
