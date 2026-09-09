@@ -38,7 +38,8 @@ export class AssetsController {
   @Get('word/:word')
   @ApiParam({
     name: 'word',
-    description: 'Palabra detectada por OCR (ignora mayúsculas y tildes)',
+    description:
+      'Palabra detectada por OCR. Prioriza la coincidencia exacta normalizada y, si no existe, admite una única coincidencia a una edición de distancia para palabras de al menos 3 caracteres',
     example: 'Árbol',
   })
   @ApiOkResponse({ type: AssetResponseDto })
@@ -50,7 +51,7 @@ export class AssetsController {
   })
   @ApiConflictResponse({
     description:
-      'La palabra normalizada coincide con más de un activo AR utilizable',
+      'La palabra normalizada coincide con más de un activo AR utilizable, de forma exacta o a la misma distancia de edición',
   })
   async findByWord(
     @Param() params: FindAssetByWordDto,

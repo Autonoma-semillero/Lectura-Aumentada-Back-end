@@ -4,7 +4,8 @@ import { MAX_ASSET_WORD_LENGTH } from '../domain/types/asset-word-normalization'
 
 export class FindAssetByWordDto {
   @ApiProperty({
-    description: 'Palabra detectada por OCR; no distingue mayúsculas ni tildes',
+    description:
+      'Palabra detectada por OCR; no distingue mayúsculas ni tildes y tolera una única edición en palabras de al menos 3 caracteres cuando no hay coincidencia exacta',
     example: 'Árbol',
     maxLength: MAX_ASSET_WORD_LENGTH,
   })
