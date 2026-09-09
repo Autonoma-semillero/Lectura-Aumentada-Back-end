@@ -1,5 +1,15 @@
-import { Body, Controller, Get, Param, Patch, Post } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Patch,
+  Post,
+  UseGuards,
+} from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
+import { Roles } from '../../../common/decorators/roles.decorator';
+import { RolesGuard } from '../../../common/guards/roles.guard';
 import { LearningUnitsService } from '../application/learning-units.service';
 import { CreateLearningUnitDto } from '../dto/create-learning-unit.dto';
 import { UpdateLearningUnitDto } from '../dto/update-learning-unit.dto';
@@ -20,11 +30,15 @@ export class LearningUnitsController {
   }
 
   @Post()
+  @UseGuards(RolesGuard)
+  @Roles('teacher', 'admin')
   async create(@Body() dto: CreateLearningUnitDto): Promise<unknown> {
     return this.learningUnitsService.create(dto);
   }
 
   @Patch(':id')
+  @UseGuards(RolesGuard)
+  @Roles('teacher', 'admin')
   async update(
     @Param('id') id: string,
     @Body() dto: UpdateLearningUnitDto,

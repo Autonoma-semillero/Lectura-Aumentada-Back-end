@@ -9,8 +9,11 @@ import {
   Patch,
   Post,
   Query,
+  UseGuards,
 } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
+import { Roles } from '../../../common/decorators/roles.decorator';
+import { RolesGuard } from '../../../common/guards/roles.guard';
 import { DailyPlansService } from '../application/daily-plans.service';
 import { CreateDailyPlanDto } from '../dto/create-daily-plan.dto';
 import { GenerateDailyPlanDto } from '../dto/generate-daily-plan.dto';
@@ -24,12 +27,16 @@ export class DailyPlansController {
   constructor(private readonly dailyPlansService: DailyPlansService) {}
 
   @Post()
+  @UseGuards(RolesGuard)
+  @Roles('teacher', 'admin')
   @HttpCode(HttpStatus.CREATED)
   async create(@Body() dto: CreateDailyPlanDto): Promise<unknown> {
     return this.dailyPlansService.create(dto);
   }
 
   @Post('generate')
+  @UseGuards(RolesGuard)
+  @Roles('teacher', 'admin')
   @HttpCode(HttpStatus.OK)
   async generate(@Body() dto: GenerateDailyPlanDto): Promise<unknown> {
     return this.dailyPlansService.generate(dto);
@@ -51,6 +58,8 @@ export class DailyPlansController {
   }
 
   @Patch(':id')
+  @UseGuards(RolesGuard)
+  @Roles('teacher', 'admin')
   async update(
     @Param('id') id: string,
     @Body() dto: UpdateDailyPlanDto,
@@ -59,6 +68,8 @@ export class DailyPlansController {
   }
 
   @Delete(':id')
+  @UseGuards(RolesGuard)
+  @Roles('teacher', 'admin')
   @HttpCode(HttpStatus.NO_CONTENT)
   async remove(@Param('id') id: string): Promise<void> {
     return this.dailyPlansService.delete(id);
