@@ -16,6 +16,11 @@ const DEMO_MODEL_URL_BY_MARKER_ID: Readonly<Record<string, string>> = {
     'https://appassets.androidplatform.net/assets/models/animals/animal-cat.glb',
 };
 
+const DEMO_AUDIO_URL_BY_MARKER_ID: Readonly<Record<string, string>> = {
+  'demo-animales-gato':
+    'https://appassets.androidplatform.net/assets/audio/animals/gato.mp3',
+};
+
 @Injectable()
 export class DemoContentSeedRepository implements IDemoContentSeedRepository {
   constructor(
@@ -114,6 +119,9 @@ export class DemoContentSeedRepository implements IDemoContentSeedRepository {
     const modelUrl =
       DEMO_MODEL_URL_BY_MARKER_ID[markerId] ??
       `https://demo.lectura.local/models/${input.categorySlug}/${input.word}.glb`;
+    const audioUrl =
+      DEMO_AUDIO_URL_BY_MARKER_ID[markerId] ??
+      `https://demo.lectura.local/audio/${input.categorySlug}/${input.word}.mp3`;
     const now = new Date();
     await this.learningUnitsCollection().updateOne(
       { marker_id: markerId },
@@ -124,7 +132,7 @@ export class DemoContentSeedRepository implements IDemoContentSeedRepository {
           marker_id: markerId,
           assets: {
             model_3d: modelUrl,
-            audio_pronunciacion: `https://demo.lectura.local/audio/${input.categorySlug}/${input.word}.mp3`,
+            audio_pronunciacion: audioUrl,
           },
           metadata_accessibility: {
             source: input.metadataSource,

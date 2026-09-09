@@ -6,6 +6,8 @@ const { MongoClient } = require('mongodb');
 const MARKER_ID = 'demo-animales-gato';
 const MODEL_URL =
   'https://appassets.androidplatform.net/assets/models/animals/animal-cat.glb';
+const AUDIO_URL =
+  'https://appassets.androidplatform.net/assets/audio/animals/gato.mp3';
 
 async function main() {
   const uri = process.env.MONGODB_URI?.trim();
@@ -25,6 +27,7 @@ async function main() {
       {
         $set: {
           'assets.model_3d': MODEL_URL,
+          'assets.audio_pronunciacion': AUDIO_URL,
           updated_at: now,
         },
       },
@@ -36,8 +39,22 @@ async function main() {
 
     const updated = await db.collection('learning_units').findOne(
       { marker_id: MARKER_ID },
-      { projection: { _id: 0, marker_id: 1, word: 1, 'assets.model_3d': 1 } },
+      {
+        projection: {
+          _id: 0,
+          marker_id: 1,
+          word: 1,
+          'assets.model_3d': 1,
+          'assets.audio_pronunciacion': 1,
+        },
+      },
     );
+    if (
+      updated?.assets?.model_3d !== MODEL_URL ||
+      updated?.assets?.audio_pronunciacion !== AUDIO_URL
+    ) {
+      throw new Error(`Failed to verify demo media for marker ${MARKER_ID}`);
+    }
     console.log(
       JSON.stringify(
         {
@@ -55,6 +72,6 @@ async function main() {
 }
 
 main().catch((error) => {
-  console.error(`Failed to register demo cat model: ${error.message}`);
+  console.error(`Failed to register demo cat media: ${error.message}`);
   process.exitCode = 1;
 });
