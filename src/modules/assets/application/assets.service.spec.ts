@@ -26,6 +26,7 @@ describe('AssetsService', () => {
       findAll: jest.fn().mockResolvedValue([]),
       findByMarker: jest.fn().mockResolvedValue(result),
       findByNormalizedWord: jest.fn().mockResolvedValue([]),
+      findByNormalizedWordDistance: jest.fn().mockResolvedValue([]),
       create: jest.fn(),
     };
   }
@@ -125,6 +126,113 @@ describe('AssetsService', () => {
     const service = new AssetsService(repository);
 
     await expect(service.findByWord('arbol')).resolves.toEqual(accentedAsset);
+  });
+
+  it('always prefers an exact usable asset over fuzzy candidates', async () => {
+    const repository = createRepository(null);
+    repository.findByNormalizedWord.mockResolvedValue([asset]);
+    repository.findByNormalizedWordDistance.mockResolvedValue([
+      { ...asset, word: 'pato' },
+    ]);
+    const service = new AssetsService(repository);
+
+    await expect(service.findByWord('GATO')).resolves.toEqual(asset);
+    expect(repository.findByNormalizedWordDistance).not.toHaveBeenCalled();
+  });
+
+  it('resolves a unique usable candidate at Levenshtein distance one', async () => {
+    const repository = createRepository(null);
+    repository.findByNormalizedWordDistance.mockResolvedValue([asset]);
+    const service = new AssetsService(repository);
+
+    await expect(service.findByWord('PATO')).resolves.toEqual(asset);
+    expect(repository.findByNormalizedWord).toHaveBeenCalledWith('pato');
+    expect(repository.findByNormalizedWordDistance).toHaveBeenCalledWith(
+      'pato',
+      1,
+    );
+  });
+
+  it('returns 409 instead of guessing between two usable distance-one assets', async () => {
+    const repository = createRepository(null);
+    repository.findByNormalizedWordDistance.mockResolvedValue([
+      asset,
+      {
+        ...asset,
+        id: '507f1f77bcf86cd799439012',
+        learning_unit_id: '507f1f77bcf86cd799439012',
+        marker_id: 'demo-animales-pato',
+        word: 'pato',
+      },
+    ]);
+    const service = new AssetsService(repository);
+
+    await expect(service.findByWord('RATO')).rejects.toBeInstanceOf(
+      ConflictException,
+    );
+  });
+
+  it('ignores unusable and non-distance-one fuzzy candidates', async () => {
+    const repository = createRepository(null);
+    repository.findByNormalizedWordDistance.mockResolvedValue([
+      { ...asset, model_3d: 'https://demo.lectura.local/models/gato.glb' },
+      { ...asset, word: 'perro' },
+    ]);
+    const service = new AssetsService(repository);
+
+    await expect(service.findByWord('PATO')).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+  });
+
+  it('fuzzy-matches when every exact record has an unusable model', async () => {
+    const repository = createRepository(null);
+    repository.findByNormalizedWord.mockResolvedValue([
+      { ...asset, word: 'pato', model_3d: undefined },
+    ]);
+    repository.findByNormalizedWordDistance.mockResolvedValue([asset]);
+    const service = new AssetsService(repository);
+
+    await expect(service.findByWord('PATO')).resolves.toEqual(asset);
+    expect(repository.findByNormalizedWordDistance).toHaveBeenCalledWith(
+      'pato',
+      1,
+    );
+  });
+
+  it('does not fuzzy-match OCR tokens shorter than three characters', async () => {
+    const repository = createRepository(null);
+    repository.findByNormalizedWordDistance.mockResolvedValue([
+      { ...asset, word: 'yo' },
+    ]);
+    const service = new AssetsService(repository);
+
+    await expect(service.findByWord('NO')).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+    expect(repository.findByNormalizedWordDistance).not.toHaveBeenCalled();
+  });
+
+  it('still resolves an exact OCR token shorter than three characters', async () => {
+    const shortWordAsset: Asset = { ...asset, word: 'yo' };
+    const repository = createRepository(null);
+    repository.findByNormalizedWord.mockResolvedValue([shortWordAsset]);
+    const service = new AssetsService(repository);
+
+    await expect(service.findByWord('YO')).resolves.toEqual(shortWordAsset);
+  });
+
+  it('does not fuzzy-match a stored token shorter than three characters', async () => {
+    const repository = createRepository(null);
+    repository.findByNormalizedWordDistance.mockResolvedValue([
+      { ...asset, word: 'sal' },
+      { ...asset, word: 'so' },
+    ]);
+    const service = new AssetsService(repository);
+
+    await expect(service.findByWord('SOL')).resolves.toMatchObject({
+      word: 'sal',
+    });
   });
 
   it('returns 404 when no candidate exactly matches the normalized word', async () => {

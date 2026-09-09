@@ -4,7 +4,10 @@ import { Connection, Types } from 'mongoose';
 import { MONGO_CONNECTION } from '../../../../database/mongodb.providers';
 import { Asset } from '../../domain/interfaces/asset.interface';
 import { IAssetsRepository } from '../../domain/interfaces/assets.repository.interface';
-import { normalizeAssetWord } from '../../domain/types/asset-word-normalization';
+import {
+  assetWordLevenshteinDistance,
+  normalizeAssetWord,
+} from '../../domain/types/asset-word-normalization';
 
 @Injectable()
 export class AssetsRepository implements IAssetsRepository {
@@ -67,7 +70,9 @@ export class AssetsRepository implements IAssetsRepository {
     return doc ? this.docToAsset(doc) : null;
   }
 
-  async findByNormalizedWord(normalizedWord: string): Promise<Asset[]> {
+  private async findByNormalizedWordPredicate(
+    predicate: (storedNormalizedWord: string) => boolean,
+  ): Promise<Asset[]> {
     /*
      * El cliente OCR estabiliza la detección y cachea cada palabra resuelta, por
      * lo que el escaneo solo ocurre al cambiar de término. Persistir e indexar
@@ -92,11 +97,32 @@ export class AssetsRepository implements IAssetsRepository {
 
     for await (const doc of cursor) {
       const asset = this.docToAsset(doc);
-      if (asset && normalizeAssetWord(asset.word) === normalizedWord) {
+      if (asset && predicate(normalizeAssetWord(asset.word))) {
         matches.push(asset);
       }
     }
     return matches;
+  }
+
+  async findByNormalizedWord(normalizedWord: string): Promise<Asset[]> {
+    return this.findByNormalizedWordPredicate(
+      (storedNormalizedWord) => storedNormalizedWord === normalizedWord,
+    );
+  }
+
+  async findByNormalizedWordDistance(
+    normalizedWord: string,
+    distance: number,
+  ): Promise<Asset[]> {
+    if (!Number.isInteger(distance) || distance < 0) {
+      return [];
+    }
+
+    return this.findByNormalizedWordPredicate(
+      (storedNormalizedWord) =>
+        assetWordLevenshteinDistance(normalizedWord, storedNormalizedWord) ===
+        distance,
+    );
   }
 
   async create(payload: Partial<Asset>): Promise<Asset | null> {

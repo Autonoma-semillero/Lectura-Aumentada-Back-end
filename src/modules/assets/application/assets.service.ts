@@ -10,7 +10,9 @@ import { ArModelOption } from '../domain/interfaces/ar-model-option.interface';
 import { Asset } from '../domain/interfaces/asset.interface';
 import { IAssetsRepository } from '../domain/interfaces/assets.repository.interface';
 import {
+  assetWordLevenshteinDistance,
   MAX_ASSET_WORD_LENGTH,
+  MIN_FUZZY_ASSET_WORD_LENGTH,
   normalizeAssetWord,
 } from '../domain/types/asset-word-normalization';
 import { CreateAssetDto } from '../dto/create-asset.dto';
@@ -71,11 +73,46 @@ export class AssetsService {
       throw new BadRequestException('Invalid word for AR asset lookup');
     }
 
-    const candidates =
+    const exactCandidates =
       await this.assetsRepository.findByNormalizedWord(normalizedWord);
+    const hasUsableExactCandidate = exactCandidates.some(
+      (asset) =>
+        this.getUsableModelUrl(asset) !== null &&
+        normalizeAssetWord(asset.word) === normalizedWord,
+    );
+    if (hasUsableExactCandidate) {
+      return this.selectUniqueWordMatch(exactCandidates, normalizedWord, 0);
+    }
+
+    if (Array.from(normalizedWord).length < MIN_FUZZY_ASSET_WORD_LENGTH) {
+      throw new NotFoundException(
+        `No assets found for normalized word ${normalizedWord}`,
+      );
+    }
+
+    const fuzzyCandidates =
+      await this.assetsRepository.findByNormalizedWordDistance(
+        normalizedWord,
+        1,
+      );
+    return this.selectUniqueWordMatch(fuzzyCandidates, normalizedWord, 1);
+  }
+
+  private selectUniqueWordMatch(
+    candidates: Asset[],
+    normalizedWord: string,
+    expectedDistance: number,
+  ): Asset {
     const matches = candidates.flatMap((asset) => {
       const modelUrl = this.getUsableModelUrl(asset);
-      if (!modelUrl || normalizeAssetWord(asset.word) !== normalizedWord) {
+      const candidateWord = normalizeAssetWord(asset.word);
+      if (
+        !modelUrl ||
+        (expectedDistance > 0 &&
+          Array.from(candidateWord).length < MIN_FUZZY_ASSET_WORD_LENGTH) ||
+        assetWordLevenshteinDistance(normalizedWord, candidateWord) !==
+          expectedDistance
+      ) {
         return [];
       }
       return [{ ...asset, model_3d: modelUrl }];
@@ -89,7 +126,9 @@ export class AssetsService {
 
     if (matches.length > 1) {
       throw new ConflictException(
-        `More than one AR asset is associated with normalized word ${normalizedWord}`,
+        expectedDistance === 0
+          ? `More than one AR asset is associated with normalized word ${normalizedWord}`
+          : `More than one AR asset is one edit away from normalized word ${normalizedWord}`,
       );
     }
     return matches[0];
