@@ -14,11 +14,15 @@ import {
 const DEMO_MODEL_URL_BY_MARKER_ID: Readonly<Record<string, string>> = {
   'demo-animales-gato':
     'https://appassets.androidplatform.net/assets/models/animals/animal-cat.glb',
+  'demo-animales-perro':
+    'https://appassets.androidplatform.net/assets/models/animals/animal-dog.glb',
 };
 
 const DEMO_AUDIO_URL_BY_MARKER_ID: Readonly<Record<string, string>> = {
   'demo-animales-gato':
     'https://appassets.androidplatform.net/assets/audio/animals/gato.mp3',
+  'demo-animales-perro':
+    'https://appassets.androidplatform.net/assets/audio/animals/perro.mp3',
 };
 
 @Injectable()

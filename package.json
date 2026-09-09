@@ -19,7 +19,8 @@
     "vercel-build": "npm run build",
     "demo:reset": "node scripts/reset-demo.js",
     "demo:audio": "node scripts/set-audio-urls.js",
-    "demo:model:cat": "node scripts/set-demo-cat-model.js"
+    "demo:model:cat": "node scripts/set-demo-animal-media.js gato",
+    "demo:model:dog": "node scripts/set-demo-animal-media.js perro"
   },
   "engines": {
     "node": ">=20"
