@@ -4,6 +4,7 @@ import { Connection, Types } from 'mongoose';
 import { MONGO_CONNECTION } from '../../../../database/mongodb.providers';
 import { Asset } from '../../domain/interfaces/asset.interface';
 import { IAssetsRepository } from '../../domain/interfaces/assets.repository.interface';
+import { normalizeAssetWord } from '../../domain/types/asset-word-normalization';
 
 @Injectable()
 export class AssetsRepository implements IAssetsRepository {
@@ -64,6 +65,38 @@ export class AssetsRepository implements IAssetsRepository {
     }
     const doc = await this.coll().findOne({ marker_id: trimmed });
     return doc ? this.docToAsset(doc) : null;
+  }
+
+  async findByNormalizedWord(normalizedWord: string): Promise<Asset[]> {
+    /*
+     * El cliente OCR estabiliza la detección y cachea cada palabra resuelta, por
+     * lo que el escaneo solo ocurre al cambiar de término. Persistir e indexar
+     * `word_normalized` queda como optimización futura cuando se migre el schema.
+     */
+    const cursor = this.coll().find(
+      {},
+      {
+        projection: {
+          _id: 1,
+          marker_id: 1,
+          word: 1,
+          assets: 1,
+          language: 1,
+          metadata_accessibility: 1,
+          created_at: 1,
+          updated_at: 1,
+        },
+      },
+    );
+    const matches: Asset[] = [];
+
+    for await (const doc of cursor) {
+      const asset = this.docToAsset(doc);
+      if (asset && normalizeAssetWord(asset.word) === normalizedWord) {
+        matches.push(asset);
+      }
+    }
+    return matches;
   }
 
   async create(payload: Partial<Asset>): Promise<Asset | null> {

@@ -1,5 +1,8 @@
 import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
 import {
+  ApiBadRequestResponse,
+  ApiBearerAuth,
+  ApiConflictResponse,
   ApiNotFoundResponse,
   ApiOkResponse,
   ApiParam,
@@ -11,8 +14,10 @@ import { AssetsService } from '../application/assets.service';
 import { ArModelOptionResponseDto } from '../dto/ar-model-option-response.dto';
 import { AssetResponseDto } from '../dto/asset-response.dto';
 import { CreateAssetDto } from '../dto/create-asset.dto';
+import { FindAssetByWordDto } from '../dto/find-asset-by-word.dto';
 
 @ApiTags('assets')
+@ApiBearerAuth()
 @Controller('assets')
 export class AssetsController {
   constructor(private readonly assetsService: AssetsService) {}
@@ -28,6 +33,29 @@ export class AssetsController {
   @ApiOkResponse({ type: [ArModelOptionResponseDto] })
   async listModels(): Promise<ArModelOptionResponseDto[]> {
     return this.assetsService.listModels();
+  }
+
+  @Get('word/:word')
+  @ApiParam({
+    name: 'word',
+    description: 'Palabra detectada por OCR (ignora mayúsculas y tildes)',
+    example: 'Árbol',
+  })
+  @ApiOkResponse({ type: AssetResponseDto })
+  @ApiBadRequestResponse({
+    description: 'La palabra no tiene un formato válido',
+  })
+  @ApiNotFoundResponse({
+    description: 'La palabra no tiene un activo AR asociado',
+  })
+  @ApiConflictResponse({
+    description:
+      'La palabra normalizada coincide con más de un activo AR utilizable',
+  })
+  async findByWord(
+    @Param() params: FindAssetByWordDto,
+  ): Promise<AssetResponseDto> {
+    return this.assetsService.findByWord(params.word);
   }
 
   @Get('marker/:markerId')
