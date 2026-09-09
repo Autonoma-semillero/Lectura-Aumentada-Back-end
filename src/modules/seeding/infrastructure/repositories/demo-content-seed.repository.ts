@@ -11,6 +11,11 @@ import {
   UpsertDemoWordCardInput,
 } from '../../domain/interfaces/demo-content-seed.repository.interface';
 
+const DEMO_MODEL_URL_BY_MARKER_ID: Readonly<Record<string, string>> = {
+  'demo-animales-gato':
+    'https://appassets.androidplatform.net/assets/models/animals/animal-cat.glb',
+};
+
 @Injectable()
 export class DemoContentSeedRepository implements IDemoContentSeedRepository {
   constructor(
@@ -106,6 +111,9 @@ export class DemoContentSeedRepository implements IDemoContentSeedRepository {
   async upsertLearningUnit(input: UpsertDemoLearningUnitInput): Promise<string> {
     const categoryOid = new Types.ObjectId(input.categoryId);
     const markerId = `demo-${input.categorySlug}-${input.word}`;
+    const modelUrl =
+      DEMO_MODEL_URL_BY_MARKER_ID[markerId] ??
+      `https://demo.lectura.local/models/${input.categorySlug}/${input.word}.glb`;
     const now = new Date();
     await this.learningUnitsCollection().updateOne(
       { marker_id: markerId },
@@ -115,7 +123,7 @@ export class DemoContentSeedRepository implements IDemoContentSeedRepository {
           category_id: categoryOid,
           marker_id: markerId,
           assets: {
-            model_3d: `https://demo.lectura.local/models/${input.categorySlug}/${input.word}.glb`,
+            model_3d: modelUrl,
             audio_pronunciacion: `https://demo.lectura.local/audio/${input.categorySlug}/${input.word}.mp3`,
           },
           metadata_accessibility: {
