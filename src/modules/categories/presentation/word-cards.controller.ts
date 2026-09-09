@@ -8,8 +8,11 @@ import {
   Patch,
   Post,
   Query,
+  UseGuards,
 } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
+import { Roles } from '../../../common/decorators/roles.decorator';
+import { RolesGuard } from '../../../common/guards/roles.guard';
 import { WordCardsService } from '../application/word-cards.service';
 import { CreateWordCardDto } from '../dto/create-word-card.dto';
 import { ListWordCardsQueryDto } from '../dto/list-word-cards-query.dto';
@@ -22,6 +25,8 @@ export class WordCardsController {
   constructor(private readonly wordCardsService: WordCardsService) {}
 
   @Post()
+  @UseGuards(RolesGuard)
+  @Roles('teacher', 'admin')
   @HttpCode(HttpStatus.CREATED)
   async create(@Body() dto: CreateWordCardDto): Promise<unknown> {
     return this.wordCardsService.create(dto);
@@ -38,6 +43,8 @@ export class WordCardsController {
   }
 
   @Patch(':id/category')
+  @UseGuards(RolesGuard)
+  @Roles('teacher', 'admin')
   async setCategory(
     @Param('id') id: string,
     @Body() dto: UpdateWordCardCategoryDto,
@@ -46,6 +53,8 @@ export class WordCardsController {
   }
 
   @Patch(':id')
+  @UseGuards(RolesGuard)
+  @Roles('teacher', 'admin')
   async update(
     @Param('id') id: string,
     @Body() dto: UpdateWordCardDto,

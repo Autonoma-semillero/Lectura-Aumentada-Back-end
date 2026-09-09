@@ -8,8 +8,11 @@ import {
   Patch,
   Post,
   Query,
+  UseGuards,
 } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
+import { Roles } from '../../../common/decorators/roles.decorator';
+import { RolesGuard } from '../../../common/guards/roles.guard';
 import { CategoriesService } from '../application/categories.service';
 import { CreateCategoryDto } from '../dto/create-category.dto';
 import { ListCategoriesQueryDto } from '../dto/list-categories-query.dto';
@@ -37,6 +40,8 @@ export class CategoriesController {
   }
 
   @Post('reorder')
+  @UseGuards(RolesGuard)
+  @Roles('teacher', 'admin')
   async reorder(@Body() dto: ReorderCategoriesDto): Promise<unknown> {
     return this.categoriesService.reorder(dto);
   }
@@ -47,11 +52,15 @@ export class CategoriesController {
   }
 
   @Post()
+  @UseGuards(RolesGuard)
+  @Roles('teacher', 'admin')
   async create(@Body() dto: CreateCategoryDto): Promise<unknown> {
     return this.categoriesService.create(dto);
   }
 
   @Patch(':id')
+  @UseGuards(RolesGuard)
+  @Roles('teacher', 'admin')
   async update(
     @Param('id') id: string,
     @Body() dto: UpdateCategoryDto,
@@ -60,6 +69,8 @@ export class CategoriesController {
   }
 
   @Delete(':id')
+  @UseGuards(RolesGuard)
+  @Roles('teacher', 'admin')
   @HttpCode(204)
   async remove(@Param('id') id: string): Promise<void> {
     await this.categoriesService.remove(id);
