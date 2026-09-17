@@ -9,7 +9,7 @@
   "routes": [
     {
       "src": "/health",
-      "dest": "/api/health"
+      "dest": "/api/[...all].ts"
     },
     {
       "src": "/(.*)",
