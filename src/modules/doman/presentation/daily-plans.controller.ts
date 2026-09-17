@@ -18,7 +18,9 @@ import { Roles } from '../../../common/decorators/roles.decorator';
 import { RolesGuard } from '../../../common/guards/roles.guard';
 import type { AuthRequestUser } from '../../auth/dto/auth-request-user.dto';
 import { DailyPlansService } from '../application/daily-plans.service';
+import { PlanAssignmentsService } from '../application/plan-assignments.service';
 import type { DomanRequester } from '../domain/types/doman-requester.type';
+import { BulkGenerateDailyPlansDto } from '../dto/bulk-generate-daily-plans.dto';
 import { CreateDailyPlanDto } from '../dto/create-daily-plan.dto';
 import { GenerateDailyPlanDto } from '../dto/generate-daily-plan.dto';
 import { ListDailyPlansQueryDto } from '../dto/list-daily-plans-query.dto';
@@ -28,7 +30,10 @@ import { UpdateDailyPlanDto } from '../dto/update-daily-plan.dto';
 @ApiTags('doman-daily-plans')
 @Controller('doman/daily-plans')
 export class DailyPlansController {
-  constructor(private readonly dailyPlansService: DailyPlansService) {}
+  constructor(
+    private readonly dailyPlansService: DailyPlansService,
+    private readonly planAssignmentsService: PlanAssignmentsService,
+  ) {}
 
   @Post()
   @UseGuards(RolesGuard)
@@ -50,6 +55,17 @@ export class DailyPlansController {
     @Req() req: Request & { user: AuthRequestUser },
   ): Promise<unknown> {
     return this.dailyPlansService.generate(dto, this.toRequester(req));
+  }
+
+  @Post('bulk-generate')
+  @UseGuards(RolesGuard)
+  @Roles('teacher', 'admin')
+  @HttpCode(HttpStatus.OK)
+  async bulkGenerate(
+    @Body() dto: BulkGenerateDailyPlansDto,
+    @Req() req: Request & { user: AuthRequestUser },
+  ): Promise<unknown> {
+    return this.planAssignmentsService.generate(dto, this.toRequester(req));
   }
 
   @Get()

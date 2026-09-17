@@ -40,6 +40,7 @@ export interface StudyPlanPatchPayload {
 export interface StudyPlanListFilter {
   studentId?: string;
   status?: DomanStudyPlanStatus;
+  createdBy?: string;
 }
 
 export interface IStudyPlansRepository {

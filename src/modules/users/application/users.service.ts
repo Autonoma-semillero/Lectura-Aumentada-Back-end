@@ -27,6 +27,24 @@ export class UsersService {
     return user ? this.toPublicUserResponse(user) : null;
   }
 
+  async findStudentsByIds(ids: string[]): Promise<User[]> {
+    const students = await this.usersRepository.findStudentsByIds([
+      ...new Set(ids),
+    ]);
+    return students.map((student) => this.withoutPasswordHash(student));
+  }
+
+  async searchStudents(query = '', limit = 30, offset = 0): Promise<User[]> {
+    const normalizedLimit = Math.max(1, Math.min(Math.trunc(limit), 100));
+    const normalizedOffset = Math.max(0, Math.trunc(offset));
+    const students = await this.usersRepository.searchStudents(
+      query.trim(),
+      normalizedLimit,
+      normalizedOffset,
+    );
+    return students.map((student) => this.withoutPasswordHash(student));
+  }
+
   async createPublic(dto: CreateUserDto): Promise<PublicUserResponseDto> {
     const email = dto.email.trim().toLowerCase();
     const username = dto.username.trim().toLowerCase();
@@ -108,5 +126,11 @@ export class UsersService {
       created_at: rest.created_at,
       updated_at: rest.updated_at,
     };
+  }
+
+  private withoutPasswordHash(user: User): User {
+    const { password_hash: _passwordHash, ...student } = user;
+    void _passwordHash;
+    return student;
   }
 }

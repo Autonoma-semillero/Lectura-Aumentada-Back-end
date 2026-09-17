@@ -3,10 +3,7 @@ import type { Document } from 'mongodb';
 import { Connection } from 'mongoose';
 import { Types } from 'mongoose';
 import { MONGO_CONNECTION } from '../../../../database/mongodb.providers';
-import {
-  User,
-  UserRole,
-} from '../../domain/interfaces/user.interface';
+import { User, UserRole } from '../../domain/interfaces/user.interface';
 import { IUsersRepository } from '../../domain/interfaces/users.repository.interface';
 
 @Injectable()
@@ -66,6 +63,60 @@ export class UsersRepository implements IUsersRepository {
     const normalizedUsername = username.trim().toLowerCase();
     const doc = await this.coll().findOne({ username: normalizedUsername });
     return doc ? this.toUser(doc) : null;
+  }
+
+  async findStudentsByIds(ids: string[]): Promise<User[]> {
+    const uniqueIds = [...new Set(ids)].filter((id) =>
+      Types.ObjectId.isValid(id),
+    );
+    if (uniqueIds.length === 0) {
+      return [];
+    }
+    const docs = await this.coll()
+      .find({
+        $and: [
+          {
+            _id: { $in: uniqueIds.map((id) => new Types.ObjectId(id)) },
+            roles: 'student',
+          },
+          {
+            $or: [{ status: 'active' }, { status: { $exists: false } }],
+          },
+        ],
+      })
+      .sort({ display_name: 1, email: 1 })
+      .toArray();
+    return docs.map((doc) => this.toUser(doc));
+  }
+
+  async searchStudents(
+    query: string,
+    limit: number,
+    offset = 0,
+  ): Promise<User[]> {
+    const filters: Record<string, unknown>[] = [
+      { roles: 'student' },
+      {
+        $or: [{ status: 'active' }, { status: { $exists: false } }],
+      },
+    ];
+    const term = query.trim();
+    if (term) {
+      const regex = {
+        $regex: term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'),
+        $options: 'i',
+      };
+      filters.push({
+        $or: [{ display_name: regex }, { username: regex }, { email: regex }],
+      });
+    }
+    const docs = await this.coll()
+      .find({ $and: filters })
+      .sort({ display_name: 1, email: 1, _id: 1 })
+      .skip(offset)
+      .limit(limit)
+      .toArray();
+    return docs.map((doc) => this.toUser(doc));
   }
 
   async create(payload: Partial<User>): Promise<User> {

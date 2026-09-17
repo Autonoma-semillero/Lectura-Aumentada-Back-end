@@ -19,6 +19,10 @@ import {
 } from '../domain/constants/doman.tokens';
 import { IDailyPlansRepository } from '../domain/interfaces/daily-plans.repository.interface';
 import { DomanDailyPlan } from '../domain/interfaces/doman-daily-plan.interface';
+import {
+  DomanDailyPlanGeneration,
+  DomanDailyPlanSummary,
+} from '../domain/interfaces/doman-daily-plan-summary.interface';
 import type {
   DomanStudyPlan,
   DomanStudyPlanCategory,
@@ -83,7 +87,10 @@ export class DailyPlansService {
     );
   }
 
-  async getById(id: string, requester: DomanRequester): Promise<DomanDailyPlan> {
+  async getById(
+    id: string,
+    requester: DomanRequester,
+  ): Promise<DomanDailyPlan> {
     const plan = await this.requirePlan(id);
     assertCanAccessStudent(requester, plan.student_id);
     return plan;
@@ -104,7 +111,7 @@ export class DailyPlansService {
     studentId: string,
     categoryId: string | undefined,
     requester: DomanRequester,
-  ): Promise<unknown> {
+  ): Promise<DomanDailyPlanSummary> {
     if (!isMongoObjectId(studentId)) {
       throw new BadRequestException('Invalid student_id');
     }
@@ -124,7 +131,9 @@ export class DailyPlansService {
       studyContext?.category.category_id ??
       (await this.resolveDefaultCategoryId(studentId));
     if (!resolvedCategoryId) {
-      throw new BadRequestException('No available category to generate a daily plan');
+      throw new BadRequestException(
+        'No available category to generate a daily plan',
+      );
     }
     const existing = await this.dailyPlansRepository.findByStudentAndPlanDate(
       studentId,
@@ -132,7 +141,9 @@ export class DailyPlansService {
       resolvedCategoryId,
     );
     if (existing) {
-      const sessions = await this.sessionsRepository.findByDailyPlanId(existing.id);
+      const sessions = await this.sessionsRepository.findByDailyPlanId(
+        existing.id,
+      );
       const cards = studyContext
         ? await this.resolveConfiguredCards(
             studyContext.category,
@@ -154,7 +165,7 @@ export class DailyPlansService {
   async generate(
     dto: GenerateDailyPlanDto,
     requester: DomanRequester,
-  ): Promise<unknown> {
+  ): Promise<DomanDailyPlanSummary> {
     if (!isMongoObjectId(dto.student_id)) {
       throw new BadRequestException('Invalid student_id');
     }
@@ -162,7 +173,26 @@ export class DailyPlansService {
     return this.generatePlan(dto);
   }
 
-  private async generatePlan(dto: GenerateDailyPlanDto): Promise<unknown> {
+  async generateForAssignment(
+    dto: GenerateDailyPlanDto,
+    requester: DomanRequester,
+  ): Promise<DomanDailyPlanGeneration> {
+    assertCanManageDoman(requester);
+    if (!isMongoObjectId(dto.student_id)) {
+      throw new BadRequestException('Invalid student_id');
+    }
+    return this.generatePlanWithStatus(dto);
+  }
+
+  private async generatePlan(
+    dto: GenerateDailyPlanDto,
+  ): Promise<DomanDailyPlanSummary> {
+    return (await this.generatePlanWithStatus(dto)).plan;
+  }
+
+  private async generatePlanWithStatus(
+    dto: GenerateDailyPlanDto,
+  ): Promise<DomanDailyPlanGeneration> {
     try {
       return await this.generatePlanOnce(dto);
     } catch (error) {
@@ -171,7 +201,9 @@ export class DailyPlansService {
     }
   }
 
-  private async generatePlanOnce(dto: GenerateDailyPlanDto): Promise<unknown> {
+  private async generatePlanOnce(
+    dto: GenerateDailyPlanDto,
+  ): Promise<DomanDailyPlanGeneration> {
     if (!isMongoObjectId(dto.student_id)) {
       throw new BadRequestException('Invalid student_id');
     }
@@ -202,18 +234,19 @@ export class DailyPlansService {
       studyContext?.category.category_id ??
       (await this.resolveDefaultCategoryId(dto.student_id));
     if (!categoryId) {
-      throw new BadRequestException('No available category to generate a daily plan');
+      throw new BadRequestException(
+        'No available category to generate a daily plan',
+      );
     }
     await this.categoriesService.findById(categoryId);
 
     const selectedCards = studyContext
-      ? await this.resolveConfiguredCards(
-          studyContext.category,
-          dto.student_id,
-        )
+      ? await this.resolveConfiguredCards(studyContext.category, dto.student_id)
       : await this.resolveCards(dto.student_id, categoryId, targetCardsCount);
     if (selectedCards.length === 0) {
-      throw new BadRequestException('No available word cards to generate the daily plan');
+      throw new BadRequestException(
+        'No available word cards to generate the daily plan',
+      );
     }
     targetCardsCount = selectedCards.length;
 
@@ -224,6 +257,7 @@ export class DailyPlansService {
     );
 
     let plan: DomanDailyPlan;
+    let createdNewPlan = false;
     if (!existing) {
       plan = await this.dailyPlansRepository.create({
         studentId: dto.student_id,
@@ -233,19 +267,26 @@ export class DailyPlansService {
         categoryId,
         studyPlanId: studyContext?.plan.id,
         studyPlanLevelId: studyContext?.level.id,
-        algorithmVersion: studyContext
-          ? 'doman-study-plan-v1'
-          : 'doman-mvp-v1',
+        algorithmVersion: studyContext ? 'doman-study-plan-v1' : 'doman-mvp-v1',
         notes: studyContext
           ? `Generated from study plan: ${studyContext.plan.name}`
           : 'Auto-generated daily plan',
       });
+      createdNewPlan = true;
     } else {
-      const existingSessions = await this.sessionsRepository.findByDailyPlanId(existing.id);
+      const existingSessions = await this.sessionsRepository.findByDailyPlanId(
+        existing.id,
+      );
       if (!force) {
-        return this.toSummary(existing, existingSessions, selectedCards);
+        return {
+          status: 'existing',
+          plan: this.toSummary(existing, existingSessions, selectedCards),
+        };
       }
-      if (force && existingSessions.some((session) => session.status === 'completed')) {
+      if (
+        force &&
+        existingSessions.some((session) => session.status === 'completed')
+      ) {
         throw new ConflictException(
           'Cannot regenerate a daily plan with completed sessions',
         );
@@ -260,9 +301,7 @@ export class DailyPlansService {
         categoryId,
         studyPlanId: studyContext?.plan.id,
         studyPlanLevelId: studyContext?.level.id,
-        algorithmVersion: studyContext
-          ? 'doman-study-plan-v1'
-          : 'doman-mvp-v1',
+        algorithmVersion: studyContext ? 'doman-study-plan-v1' : 'doman-mvp-v1',
         notes: force ? 'Regenerated daily plan' : 'Generated daily plan',
       });
       if (!updated) {
@@ -271,15 +310,30 @@ export class DailyPlansService {
       plan = updated;
     }
 
-    const sessions = await this.createSessionsForPlan(
-      plan,
-      selectedCards,
-      targetSessionsCount,
-      displayMs,
-      studyContext?.plan.audio_mode ?? 'manual',
-      studyContext?.plan.mode ?? 'auto',
-    );
-    return this.toSummary(plan, sessions, selectedCards);
+    let sessions: Array<{
+      id: string;
+      status: string;
+      session_index: number;
+    }>;
+    try {
+      sessions = await this.createSessionsForPlan(
+        plan,
+        selectedCards,
+        targetSessionsCount,
+        displayMs,
+        studyContext?.plan.audio_mode ?? 'manual',
+        studyContext?.plan.mode ?? 'auto',
+      );
+    } catch (error) {
+      if (createdNewPlan) {
+        await this.cleanupFailedNewPlan(plan.id);
+      }
+      throw error;
+    }
+    return {
+      status: 'generated',
+      plan: this.toSummary(plan, sessions, selectedCards),
+    };
   }
 
   async delete(id: string, requester: DomanRequester): Promise<void> {
@@ -287,7 +341,9 @@ export class DailyPlansService {
     await this.requirePlan(id);
     const sessions = await this.sessionsRepository.findByDailyPlanId(id);
     if (sessions.length > 0) {
-      await this.sessionCardsRepository.deleteBySessionIds(sessions.map((s) => s.id));
+      await this.sessionCardsRepository.deleteBySessionIds(
+        sessions.map((s) => s.id),
+      );
       await this.sessionsRepository.deleteByDailyPlanId(id);
     }
     await this.dailyPlansRepository.delete(id);
@@ -378,7 +434,11 @@ export class DailyPlansService {
       session_index: number;
     }> = [];
 
-    for (let sessionIndex = 1; sessionIndex <= targetSessionsCount; sessionIndex += 1) {
+    for (
+      let sessionIndex = 1;
+      sessionIndex <= targetSessionsCount;
+      sessionIndex += 1
+    ) {
       const session = await this.sessionsRepository.create({
         studentId: plan.student_id,
         dailyPlanId: plan.id,
@@ -406,8 +466,24 @@ export class DailyPlansService {
     return sessions;
   }
 
-  private async resolveDefaultCategoryId(studentId: string): Promise<string | null> {
-    const counts = await this.wordCardsRepository.countWordCardsByCategoryForStudent(studentId);
+  private async cleanupFailedNewPlan(planId: string): Promise<void> {
+    const sessions = await this.sessionsRepository.findByDailyPlanId(planId);
+    if (sessions.length > 0) {
+      await this.sessionCardsRepository.deleteBySessionIds(
+        sessions.map((session) => session.id),
+      );
+      await this.sessionsRepository.deleteByDailyPlanId(planId);
+    }
+    await this.dailyPlansRepository.delete(planId);
+  }
+
+  private async resolveDefaultCategoryId(
+    studentId: string,
+  ): Promise<string | null> {
+    const counts =
+      await this.wordCardsRepository.countWordCardsByCategoryForStudent(
+        studentId,
+      );
     return selectDefaultCategoryId(counts);
   }
 
@@ -416,18 +492,20 @@ export class DailyPlansService {
     categoryId: string,
     limit: number,
   ): Promise<WordCardListed[]> {
-    const primary = await this.wordCardsRepository.listByStudentCategoryAndStatuses(
-      studentId,
-      categoryId,
-      ['new', 'active'],
-    );
-    let candidateCards = primary;
-    if (candidateCards.length < limit) {
-      const fallback = await this.wordCardsRepository.listByStudentCategoryAndStatuses(
+    const primary =
+      await this.wordCardsRepository.listByStudentCategoryAndStatuses(
         studentId,
         categoryId,
-        ['completed'],
+        ['new', 'active'],
       );
+    let candidateCards = primary;
+    if (candidateCards.length < limit) {
+      const fallback =
+        await this.wordCardsRepository.listByStudentCategoryAndStatuses(
+          studentId,
+          categoryId,
+          ['completed'],
+        );
       candidateCards = candidateCards.concat(fallback);
     }
     return sortCardsByPriority(candidateCards).slice(0, limit);
@@ -510,7 +588,7 @@ export class DailyPlansService {
     plan: DomanDailyPlan,
     sessions: Array<{ id: string; status: string; session_index: number }> = [],
     cards: WordCardListed[] = [],
-  ) {
+  ): DomanDailyPlanSummary {
     return {
       plan,
       cards_count: cards.length || plan.target_cards_count,
@@ -521,9 +599,12 @@ export class DailyPlansService {
         audio_url: card.audio_url,
       })),
       sessions_count: sessions.length,
-      completed_sessions_count: sessions.filter((session) => session.status === 'completed').length,
+      completed_sessions_count: sessions.filter(
+        (session) => session.status === 'completed',
+      ).length,
       pending_sessions_count: sessions.filter(
-        (session) => session.status === 'planned' || session.status === 'in_progress',
+        (session) =>
+          session.status === 'planned' || session.status === 'in_progress',
       ).length,
       next_session_id:
         sessions.find((session) => session.status === 'in_progress')?.id ??
@@ -542,7 +623,9 @@ export class DailyPlansService {
 
   private rethrowDuplicateGeneration(error: unknown): void {
     if (this.isDuplicateKeyError(error)) {
-      throw new ConflictException('The daily plan or its sessions were generated concurrently');
+      throw new ConflictException(
+        'The daily plan or its sessions were generated concurrently',
+      );
     }
   }
 
