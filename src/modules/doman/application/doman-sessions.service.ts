@@ -37,6 +37,7 @@ import {
   isSameObjectId,
 } from './doman-authorization.util';
 import { todayPlanDateUtcMidnight } from './plan-date.util';
+import { sortDomanCardsByPriority } from './word-card-selection.util';
 
 @Injectable()
 export class DomanSessionsService {
@@ -84,7 +85,10 @@ export class DomanSessionsService {
     return session;
   }
 
-  async getDetailedById(id: string, requester: DomanRequester): Promise<unknown> {
+  async getDetailedById(
+    id: string,
+    requester: DomanRequester,
+  ): Promise<unknown> {
     const session = await this.getById(id, requester);
     return this.toDetailedSession(session);
   }
@@ -104,7 +108,8 @@ export class DomanSessionsService {
       throw new BadRequestException('Invalid category_id');
     }
     const categoryId =
-      query.category_id ?? (await this.resolveDefaultCategoryId(query.student_id));
+      query.category_id ??
+      (await this.resolveDefaultCategoryId(query.student_id));
     if (!categoryId) {
       throw new NotFoundException('No daily plan found for today');
     }
@@ -127,7 +132,10 @@ export class DomanSessionsService {
     return this.toDetailedSession(nextSession);
   }
 
-  async getHistory(studentId: string, requester: DomanRequester): Promise<unknown> {
+  async getHistory(
+    studentId: string,
+    requester: DomanRequester,
+  ): Promise<unknown> {
     if (!isMongoObjectId(studentId)) {
       throw new BadRequestException('Invalid student_id');
     }
@@ -156,24 +164,29 @@ export class DomanSessionsService {
       throw new BadRequestException('Invalid student_id');
     }
     assertCanAccessStudent(requester, studentId);
-    const sessions = await this.sessionsRepository.findByStudentAndStatuses(studentId, [
-      'planned',
-      'in_progress',
-      'completed',
-      'cancelled',
-    ]);
+    const sessions = await this.sessionsRepository.findByStudentAndStatuses(
+      studentId,
+      ['planned', 'in_progress', 'completed', 'cancelled'],
+    );
     const cards = await this.wordCardsRepository.listByStudentId(studentId);
-    const exposures = await this.exposureLogsRepository.listByStudent(studentId);
+    const exposures =
+      await this.exposureLogsRepository.listByStudent(studentId);
     return {
       student_id: studentId,
-      planned_sessions_count: sessions.filter((session) => session.status === 'planned').length,
+      planned_sessions_count: sessions.filter(
+        (session) => session.status === 'planned',
+      ).length,
       in_progress_sessions_count: sessions.filter(
         (session) => session.status === 'in_progress',
       ).length,
-      completed_sessions_count: sessions.filter((session) => session.status === 'completed').length,
+      completed_sessions_count: sessions.filter(
+        (session) => session.status === 'completed',
+      ).length,
       cards_new_count: cards.filter((card) => card.status === 'new').length,
-      cards_active_count: cards.filter((card) => card.status === 'active').length,
-      cards_completed_count: cards.filter((card) => card.status === 'completed').length,
+      cards_active_count: cards.filter((card) => card.status === 'active')
+        .length,
+      cards_completed_count: cards.filter((card) => card.status === 'completed')
+        .length,
       last_activity_at: exposures[0]?.event_ts,
     };
   }
@@ -203,23 +216,36 @@ export class DomanSessionsService {
   ): Promise<unknown> {
     const session = await this.getById(id, requester);
     if (session.status === 'completed' || session.status === 'cancelled') {
-      throw new BadRequestException('Cannot register exposure on a closed session');
+      throw new BadRequestException(
+        'Cannot register exposure on a closed session',
+      );
     }
     const now = new Date();
     if (dto.event_type !== 'session_finished') {
       if (!dto.word_card_id) {
-        throw new BadRequestException('word_card_id is required for card events');
+        throw new BadRequestException(
+          'word_card_id is required for card events',
+        );
       }
-      const sessionCard = await this.sessionCardsRepository.findBySessionIdAndWordCardId(
-        id,
-        dto.word_card_id,
-      );
+      const sessionCard =
+        await this.sessionCardsRepository.findBySessionIdAndWordCardId(
+          id,
+          dto.word_card_id,
+        );
       if (!sessionCard) {
-        throw new BadRequestException('word_card_id does not belong to the session');
+        throw new BadRequestException(
+          'word_card_id does not belong to the session',
+        );
       }
       if (dto.event_type === 'card_shown') {
-        await this.sessionCardsRepository.touchDisplayedAt(id, dto.word_card_id, now);
-        const currentCard = await this.wordCardsRepository.findById(dto.word_card_id);
+        await this.sessionCardsRepository.touchDisplayedAt(
+          id,
+          dto.word_card_id,
+          now,
+        );
+        const currentCard = await this.wordCardsRepository.findById(
+          dto.word_card_id,
+        );
         await this.wordCardsRepository.applyExposure(dto.word_card_id, {
           lastShownAt: now,
           timesShownIncrement: 1,
@@ -234,7 +260,11 @@ export class DomanSessionsService {
         });
       }
       if (dto.event_type === 'audio_played') {
-        await this.sessionCardsRepository.touchAudioPlayedAt(id, dto.word_card_id, now);
+        await this.sessionCardsRepository.touchAudioPlayedAt(
+          id,
+          dto.word_card_id,
+          now,
+        );
         await this.wordCardsRepository.applyExposure(dto.word_card_id, {
           timesAudioPlayedIncrement: 1,
         });
@@ -274,10 +304,11 @@ export class DomanSessionsService {
 
     const cards = await this.sessionCardsRepository.listBySessionId(id);
     for (const card of cards) {
-      const shownCount = await this.exposureLogsRepository.countByWordCardAndType(
-        card.word_card_id,
-        'card_shown',
-      );
+      const shownCount =
+        await this.exposureLogsRepository.countByWordCardAndType(
+          card.word_card_id,
+          'card_shown',
+        );
       const nextStatus = shownCount >= 3 ? 'completed' : 'active';
       await this.wordCardsRepository.applyExposure(card.word_card_id, {
         status: nextStatus,
@@ -307,7 +338,9 @@ export class DomanSessionsService {
       throw new BadRequestException('student_id does not match the daily plan');
     }
     if (!isSameObjectId(plan.category_id, dto.category_id)) {
-      throw new BadRequestException('category_id does not match the daily plan');
+      throw new BadRequestException(
+        'category_id does not match the daily plan',
+      );
     }
     return this.sessionsRepository.create({
       studentId: dto.student_id,
@@ -331,7 +364,9 @@ export class DomanSessionsService {
     if (dto.category_id !== undefined) {
       const plan = await this.requireDailyPlan(session.daily_plan_id);
       if (!isSameObjectId(plan.category_id, dto.category_id)) {
-        throw new BadRequestException('category_id does not match the daily plan');
+        throw new BadRequestException(
+          'category_id does not match the daily plan',
+        );
       }
     }
     const updated = await this.sessionsRepository.update(id, {
@@ -354,9 +389,8 @@ export class DomanSessionsService {
   ): Promise<DomanSession[]> {
     assertCanManageDoman(requester);
     const plan = await this.requireDailyPlan(dailyPlanId);
-    const existing = await this.sessionsRepository.findByDailyPlanId(
-      dailyPlanId,
-    );
+    const existing =
+      await this.sessionsRepository.findByDailyPlanId(dailyPlanId);
     const count = dto.count ?? 1;
     if (existing.length + count > 10) {
       throw new BadRequestException(
@@ -386,8 +420,8 @@ export class DomanSessionsService {
         : configuredCardIds !== null
           ? configuredCardIds
           : fallbackCards
-            .slice(0, plan.target_cards_count)
-            .map((card) => card.id);
+              .slice(0, plan.target_cards_count)
+              .map((card) => card.id);
     if (wordCardIds.length === 0) {
       throw new BadRequestException(
         'No word cards are available for the new session',
@@ -397,8 +431,10 @@ export class DomanSessionsService {
     const usedIndexes = new Set(
       existing.map((session) => session.session_index),
     );
-    const availableIndexes = Array.from({ length: 10 }, (_, index) => index + 1)
-      .filter((index) => !usedIndexes.has(index));
+    const availableIndexes = Array.from(
+      { length: 10 },
+      (_, index) => index + 1,
+    ).filter((index) => !usedIndexes.has(index));
     for (let offset = 0; offset < count; offset += 1) {
       const sessionIndex = availableIndexes[offset];
       const session = await this.sessionsRepository.create({
@@ -426,10 +462,7 @@ export class DomanSessionsService {
     return sessions;
   }
 
-  async restore(
-    id: string,
-    requester: DomanRequester,
-  ): Promise<DomanSession> {
+  async restore(id: string, requester: DomanRequester): Promise<DomanSession> {
     assertCanManageDoman(requester);
     await this.requireSession(id);
     await this.sessionCardsRepository.resetBySessionIds([id]);
@@ -447,19 +480,15 @@ export class DomanSessionsService {
   ): Promise<DomanSession[]> {
     assertCanManageDoman(requester);
     await this.requireDailyPlan(dailyPlanId);
-    const sessions = await this.sessionsRepository.findByDailyPlanId(
-      dailyPlanId,
-    );
+    const sessions =
+      await this.sessionsRepository.findByDailyPlanId(dailyPlanId);
     const ids = sessions.map((session) => session.id);
     await this.sessionCardsRepository.resetBySessionIds(ids);
     await this.sessionsRepository.restoreByIds(ids);
     return this.sessionsRepository.findByDailyPlanId(dailyPlanId);
   }
 
-  async delete(
-    id: string,
-    requester: DomanRequester,
-  ): Promise<void> {
+  async delete(id: string, requester: DomanRequester): Promise<void> {
     assertCanManageDoman(requester);
     const session = await this.requireSession(id);
     await this.exposureLogsRepository.deleteBySessionIds([id]);
@@ -481,9 +510,8 @@ export class DomanSessionsService {
   ): Promise<void> {
     assertCanManageDoman(requester);
     await this.requireDailyPlan(dailyPlanId);
-    const sessions = await this.sessionsRepository.findByDailyPlanId(
-      dailyPlanId,
-    );
+    const sessions =
+      await this.sessionsRepository.findByDailyPlanId(dailyPlanId);
     const ids = sessions.map((session) => session.id);
     await this.exposureLogsRepository.deleteBySessionIds(ids);
     await this.sessionCardsRepository.deleteBySessionIds(ids);
@@ -498,8 +526,13 @@ export class DomanSessionsService {
     return plan;
   }
 
-  private async resolveDefaultCategoryId(studentId: string): Promise<string | null> {
-    const counts = await this.wordCardsRepository.countWordCardsByCategoryForStudent(studentId);
+  private async resolveDefaultCategoryId(
+    studentId: string,
+  ): Promise<string | null> {
+    const counts =
+      await this.wordCardsRepository.countWordCardsByCategoryForStudent(
+        studentId,
+      );
     return selectDefaultCategoryId(counts);
   }
 
@@ -521,16 +554,38 @@ export class DomanSessionsService {
     if (!category) {
       return null;
     }
-    const cards = await this.wordCardsRepository.findByIds(
-      category.word_card_ids,
-    );
-    return cards
-      .filter(
-        (card) =>
-          card.student_id === plan.student_id &&
-          card.category_id === plan.category_id &&
-          card.status !== 'archived',
-      )
+    if (category.word_card_ids !== undefined) {
+      const cards = await this.wordCardsRepository.findByIds(
+        category.word_card_ids,
+      );
+      return cards
+        .filter(
+          (card) =>
+            isSameObjectId(card.student_id, plan.student_id) &&
+            isSameObjectId(card.category_id ?? '', plan.category_id) &&
+            card.status !== 'archived',
+        )
+        .map((card) => card.id);
+    }
+    const limit = plan.target_cards_count;
+    const primary =
+      await this.wordCardsRepository.listByStudentCategoryAndStatuses(
+        plan.student_id,
+        plan.category_id,
+        ['new', 'active'],
+      );
+    let candidates = primary;
+    if (candidates.length < limit) {
+      const completed =
+        await this.wordCardsRepository.listByStudentCategoryAndStatuses(
+          plan.student_id,
+          plan.category_id,
+          ['completed'],
+        );
+      candidates = candidates.concat(completed);
+    }
+    return sortDomanCardsByPriority(candidates)
+      .slice(0, limit)
       .map((card) => card.id);
   }
 

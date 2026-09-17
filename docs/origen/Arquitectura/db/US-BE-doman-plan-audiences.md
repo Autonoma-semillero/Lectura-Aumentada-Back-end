@@ -8,6 +8,11 @@ audiencia. La ejecución diaria, las sesiones y el progreso continúan siendo
 individuales por estudiante; compartir esos estados produciría resultados
 incorrectos cuando los alumnos avanzan a ritmos distintos.
 
+La misma fotografía se utiliza en los planes de estudio programados
+`doman_study_plans`. En esos planes las categorías guardan una cantidad objetivo
+y las tarjetas concretas se resuelven por estudiante al materializar cada día;
+no se comparte una lista de `word_card_ids` entre la audiencia.
+
 Cambiar la membresía de un grupo después de crear una asignación no modifica su
 audiencia histórica. Un estudiante puede pertenecer a cero, uno o varios grupos.
 Archivar un grupo elimina sus membresías activas, pero nunca elimina usuarios,

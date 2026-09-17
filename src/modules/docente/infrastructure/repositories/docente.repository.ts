@@ -142,7 +142,12 @@ export class DocenteRepository implements IDocenteRepository {
 
   async listStudents(): Promise<StudentSummary[]> {
     const docs = await this.usersColl()
-      .find({ roles: 'student', status: { $ne: 'disabled' } })
+      .find({
+        $and: [
+          { roles: 'student' },
+          { $or: [{ status: 'active' }, { status: { $exists: false } }] },
+        ],
+      })
       .sort({ display_name: 1 })
       .project({ _id: 1, email: 1, display_name: 1 })
       .toArray();

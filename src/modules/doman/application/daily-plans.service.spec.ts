@@ -46,11 +46,13 @@ describe('DailyPlansService', () => {
     create: jest.fn(),
   };
   const sessionCardsRepository = {
+    listBySessionId: jest.fn(),
     deleteBySessionIds: jest.fn(),
     createMany: jest.fn(),
   };
   const wordCardsRepository = {
     countWordCardsByCategoryForStudent: jest.fn(),
+    findByIds: jest.fn(),
     listByStudentCategoryAndStatuses: jest.fn(),
   };
   const categoriesService = {
@@ -66,6 +68,7 @@ describe('DailyPlansService', () => {
   beforeEach(async () => {
     jest.resetAllMocks();
     studyPlansRepository.findActiveForStudentAndDate.mockResolvedValue(null);
+    sessionCardsRepository.listBySessionId.mockResolvedValue([]);
     const moduleRef = await Test.createTestingModule({
       providers: [
         DailyPlansService,
@@ -234,6 +237,96 @@ describe('DailyPlansService', () => {
     expect(sessionsRepository.create).not.toHaveBeenCalled();
   });
 
+  it('getToday usa las tarjetas persistidas aunque cambie la selección dinámica', async () => {
+    jest.useFakeTimers().setSystemTime(now);
+    const plan = { ...buildPlan(studentId), target_cards_count: 2 };
+    const persistedCards = buildCards(studentId).slice(0, 2);
+    studyPlansRepository.findActiveForStudentAndDate.mockResolvedValue(
+      buildStudyPlan([studentId], {
+        category_id: categoryId,
+        target_cards_count: 3,
+      }),
+    );
+    dailyPlansRepository.findByStudentAndPlanDate.mockResolvedValue(plan);
+    sessionsRepository.findByDailyPlanId.mockResolvedValue([
+      buildSession(studentId),
+    ]);
+    sessionCardsRepository.listBySessionId.mockResolvedValue(
+      buildPersistedSessionCards(persistedCards),
+    );
+    wordCardsRepository.listByStudentCategoryAndStatuses.mockResolvedValue([
+      {
+        ...buildCards(studentId)[2],
+        word: 'selección nueva',
+      },
+    ]);
+
+    await expect(
+      service.getToday(studentId, categoryId, studentRequester),
+    ).resolves.toMatchObject({
+      cards_count: 2,
+      cards: persistedCards.map((card) => ({
+        id: card.id,
+        word: card.word,
+        status: card.status,
+      })),
+    });
+    expect(sessionCardsRepository.listBySessionId).toHaveBeenCalledWith(
+      sessionId,
+    );
+    expect(
+      wordCardsRepository.listByStudentCategoryAndStatuses,
+    ).not.toHaveBeenCalled();
+  });
+
+  it('generate sin force reutiliza las tarjetas persistidas aunque ya no haya elegibles', async () => {
+    const existing = { ...buildPlan(studentId), target_cards_count: 2 };
+    const persistedCards = buildCards(studentId).slice(0, 2);
+    studyPlansRepository.findById.mockResolvedValue(
+      buildStudyPlan([studentId], {
+        category_id: categoryId,
+        target_cards_count: 3,
+      }),
+    );
+    categoriesService.findById.mockResolvedValue({ id: categoryId });
+    dailyPlansRepository.findByStudentAndPlanDate.mockResolvedValue(existing);
+    sessionsRepository.findByDailyPlanId.mockResolvedValue([
+      buildSession(studentId),
+    ]);
+    sessionCardsRepository.listBySessionId.mockResolvedValue(
+      buildPersistedSessionCards(persistedCards),
+    );
+    wordCardsRepository.listByStudentCategoryAndStatuses.mockResolvedValue([]);
+
+    await expect(
+      service.generateForAssignment(
+        {
+          student_id: studentId,
+          study_plan_id: '507f1f77bcf86cd799439099',
+          category_id: categoryId,
+          plan_date: '2026-09-20',
+          force: false,
+        },
+        teacherRequester,
+      ),
+    ).resolves.toMatchObject({
+      status: 'existing',
+      plan: {
+        cards_count: 2,
+        cards: persistedCards.map((card) => ({
+          id: card.id,
+          word: card.word,
+          status: card.status,
+        })),
+      },
+    });
+    expect(
+      wordCardsRepository.listByStudentCategoryAndStatuses,
+    ).not.toHaveBeenCalled();
+    expect(dailyPlansRepository.update).not.toHaveBeenCalled();
+    expect(sessionsRepository.deleteByDailyPlanId).not.toHaveBeenCalled();
+  });
+
   it('crea un plan separado cuando ya existe otra categoría ese día', async () => {
     const otherPlan = buildPlan(studentId, otherCategoryId);
     const requestedPlan = buildPlan(studentId, categoryId);
@@ -261,6 +354,95 @@ describe('DailyPlansService', () => {
     expect(dailyPlansRepository.create).toHaveBeenCalledWith(
       expect.objectContaining({ categoryId }),
     );
+  });
+
+  it('resuelve una regla v2 con las tarjetas propias del estudiante', async () => {
+    prepareSuccessfulGeneration(studentId);
+    studyPlansRepository.findById.mockResolvedValue(
+      buildStudyPlan([studentId], {
+        category_id: categoryId,
+        target_cards_count: 2,
+      }),
+    );
+
+    await service.generate(
+      {
+        student_id: studentId,
+        study_plan_id: '507f1f77bcf86cd799439099',
+        category_id: categoryId,
+        plan_date: '2026-09-20',
+      },
+      teacherRequester,
+    );
+
+    expect(
+      wordCardsRepository.listByStudentCategoryAndStatuses,
+    ).toHaveBeenCalledWith(studentId, categoryId, ['new', 'active']);
+    expect(dailyPlansRepository.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        studentId,
+        targetCardsCount: 2,
+        algorithmVersion: 'doman-study-plan-v2',
+      }),
+    );
+  });
+
+  it('conserva la selección exacta de tarjetas de un plan legacy', async () => {
+    prepareSuccessfulGeneration(studentId);
+    const cards = buildCards(studentId).slice(0, 2);
+    wordCardsRepository.findByIds.mockResolvedValue(cards);
+    studyPlansRepository.findById.mockResolvedValue(
+      buildStudyPlan(
+        [studentId],
+        {
+          category_id: categoryId,
+          word_card_ids: cards.map((card) => card.id),
+        },
+        1,
+      ),
+    );
+
+    await service.generate(
+      {
+        student_id: studentId,
+        study_plan_id: '507f1f77bcf86cd799439099',
+        category_id: categoryId,
+        plan_date: '2026-09-20',
+      },
+      teacherRequester,
+    );
+
+    expect(wordCardsRepository.findByIds).toHaveBeenCalledWith(
+      cards.map((card) => card.id),
+    );
+    expect(dailyPlansRepository.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        targetCardsCount: 2,
+        algorithmVersion: 'doman-study-plan-v1',
+      }),
+    );
+  });
+
+  it('rechaza un plan lógico que no incluye al estudiante', async () => {
+    studyPlansRepository.findById.mockResolvedValue(
+      buildStudyPlan([otherStudentId], {
+        category_id: categoryId,
+        target_cards_count: 2,
+      }),
+    );
+
+    await expect(
+      service.generate(
+        {
+          student_id: studentId,
+          study_plan_id: '507f1f77bcf86cd799439099',
+          category_id: categoryId,
+          plan_date: '2026-09-20',
+        },
+        teacherRequester,
+      ),
+    ).rejects.toBeInstanceOf(ConflictException);
+    expect(dailyPlansRepository.create).not.toHaveBeenCalled();
   });
 
   it('traduce una carrera E11000 durante generate a ConflictException', async () => {
@@ -406,6 +588,58 @@ describe('DailyPlansService', () => {
       times_shown: index,
       created_at: now,
       updated_at: now,
+    }));
+  }
+
+  function buildStudyPlan(
+    studentIds: string[],
+    category:
+      | { category_id: string; target_cards_count: number }
+      | { category_id: string; word_card_ids: string[] },
+    schemaVersion = 2,
+  ) {
+    return {
+      id: '507f1f77bcf86cd799439099',
+      name: 'Plan de audiencia',
+      group_ids: [],
+      direct_student_ids: studentIds,
+      student_ids: studentIds,
+      students: studentIds.map((targetStudentId) => ({
+        student_id: targetStudentId,
+        sources: [{ type: 'direct' as const }],
+      })),
+      schema_version: schemaVersion,
+      start_date: new Date('2026-09-01T00:00:00.000Z'),
+      end_date: new Date('2026-11-30T00:00:00.000Z'),
+      sessions_per_day: 5,
+      display_ms: 2200,
+      audio_mode: 'manual' as const,
+      mode: 'auto' as const,
+      status: 'active' as const,
+      levels: [
+        {
+          id: '507f1f77bcf86cd799439098',
+          name: 'Nivel 1',
+          order_index: 1,
+          start_date: new Date('2026-09-01T00:00:00.000Z'),
+          end_date: new Date('2026-11-30T00:00:00.000Z'),
+          categories: [category],
+        },
+      ],
+      created_by: teacherRequester.userId,
+      created_at: now,
+      updated_at: now,
+    };
+  }
+
+  function buildPersistedSessionCards(cards: ReturnType<typeof buildCards>) {
+    return cards.map((card, index) => ({
+      id: `507f1f77bcf86cd79943908${index}`,
+      session_id: sessionId,
+      word_card_id: card.id,
+      order_index: index,
+      created_at: now,
+      word_card: card,
     }));
   }
 });

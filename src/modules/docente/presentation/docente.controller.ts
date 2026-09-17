@@ -22,7 +22,7 @@ import { CompletedCardsQueryDto } from '../dto/student-progress-query.dto';
 @ApiTags('docente')
 @ApiBearerAuth()
 @UseGuards(RolesGuard)
-@Roles('teacher')
+@Roles('teacher', 'admin')
 @Controller('docente')
 export class DocenteController {
   constructor(private readonly docenteService: DocenteService) {}

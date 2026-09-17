@@ -142,7 +142,13 @@ ensureCollection('learning_units', {
 ensureCollection('sessions', {
   $jsonSchema: {
     bsonType: 'object',
-    required: ['user_id', 'session_type', 'started_at', 'created_at', 'updated_at'],
+    required: [
+      'user_id',
+      'session_type',
+      'started_at',
+      'created_at',
+      'updated_at',
+    ],
     additionalProperties: true,
     properties: {
       user_id: { bsonType: 'objectId' },
@@ -209,15 +215,24 @@ db.student_group_memberships.createIndex(
   { name: 'ix_student_group_membership_student' },
 );
 
-db.categories.createIndex({ slug: 1 }, { unique: true, name: 'ux_categories_slug' });
+db.categories.createIndex(
+  { slug: 1 },
+  { unique: true, name: 'ux_categories_slug' },
+);
 db.categories.createIndex({ parent_id: 1 }, { name: 'ix_categories_parent' });
 db.categories.createIndex(
   { parent_id: 1, sort_order: 1 },
   { name: 'ix_categories_parent_sort' },
 );
 
-db.learning_units.createIndex({ marker_id: 1 }, { name: 'ix_learning_units_marker' });
-db.learning_units.createIndex({ category_id: 1 }, { name: 'ix_learning_units_category' });
+db.learning_units.createIndex(
+  { marker_id: 1 },
+  { name: 'ix_learning_units_marker' },
+);
+db.learning_units.createIndex(
+  { category_id: 1 },
+  { name: 'ix_learning_units_category' },
+);
 db.learning_units.createIndex({ word: 1 }, { name: 'ix_learning_units_word' });
 
 db.sessions.createIndex(
@@ -313,7 +328,6 @@ ensureCollection('doman_study_plans', {
     bsonType: 'object',
     required: [
       'name',
-      'student_id',
       'start_date',
       'end_date',
       'sessions_per_day',
@@ -326,11 +340,70 @@ ensureCollection('doman_study_plans', {
       'created_at',
       'updated_at',
     ],
+    anyOf: [
+      { required: ['student_id'] },
+      {
+        required: [
+          'schema_version',
+          'group_ids',
+          'direct_student_ids',
+          'student_ids',
+          'students',
+        ],
+        properties: { schema_version: { enum: [2] } },
+      },
+    ],
     additionalProperties: true,
     properties: {
       name: { bsonType: 'string', minLength: 1, maxLength: 120 },
       description: { bsonType: 'string', maxLength: 500 },
       student_id: { bsonType: 'objectId' },
+      schema_version: { bsonType: 'int', minimum: 2 },
+      group_ids: {
+        bsonType: 'array',
+        maxItems: 100,
+        uniqueItems: true,
+        items: { bsonType: 'objectId' },
+      },
+      direct_student_ids: {
+        bsonType: 'array',
+        maxItems: 50,
+        uniqueItems: true,
+        items: { bsonType: 'objectId' },
+      },
+      student_ids: {
+        bsonType: 'array',
+        minItems: 1,
+        maxItems: 50,
+        uniqueItems: true,
+        items: { bsonType: 'objectId' },
+      },
+      students: {
+        bsonType: 'array',
+        minItems: 1,
+        maxItems: 50,
+        items: {
+          bsonType: 'object',
+          required: ['student_id', 'sources'],
+          additionalProperties: false,
+          properties: {
+            student_id: { bsonType: 'objectId' },
+            sources: {
+              bsonType: 'array',
+              minItems: 1,
+              items: {
+                bsonType: 'object',
+                required: ['type'],
+                additionalProperties: false,
+                properties: {
+                  type: { enum: ['direct', 'group'] },
+                  group_id: { bsonType: 'objectId' },
+                },
+              },
+            },
+          },
+        },
+      },
       start_date: { bsonType: 'date' },
       end_date: { bsonType: 'date' },
       sessions_per_day: { bsonType: 'int', minimum: 1, maximum: 10 },
@@ -367,10 +440,19 @@ ensureCollection('doman_study_plans', {
               maxItems: 20,
               items: {
                 bsonType: 'object',
-                required: ['category_id', 'word_card_ids'],
+                required: ['category_id'],
+                oneOf: [
+                  { required: ['target_cards_count'] },
+                  { required: ['word_card_ids'] },
+                ],
                 additionalProperties: false,
                 properties: {
                   category_id: { bsonType: 'objectId' },
+                  target_cards_count: {
+                    bsonType: 'int',
+                    minimum: 1,
+                    maximum: 50,
+                  },
                   word_card_ids: {
                     bsonType: 'array',
                     minItems: 1,
@@ -565,7 +647,16 @@ ensureCollection('doman_exposure_logs', {
       student_id: { bsonType: 'objectId' },
       session_id: { bsonType: 'objectId' },
       word_card_id: { bsonType: 'objectId' },
-      event_type: { enum: ['card_shown', 'card_completed', 'card_skipped', 'audio_played', 'session_finished', 'session_completed'] },
+      event_type: {
+        enum: [
+          'card_shown',
+          'card_completed',
+          'card_skipped',
+          'audio_played',
+          'session_finished',
+          'session_completed',
+        ],
+      },
       event_ts: { bsonType: 'date' },
       display_ms: { bsonType: 'int', minimum: 0 },
       device: { bsonType: 'string' },
@@ -614,6 +705,10 @@ db.doman_study_plans.createIndex(
   { student_id: 1, status: 1, start_date: 1, end_date: 1 },
   { name: 'ix_study_plan_student_status_dates' },
 );
+db.doman_study_plans.createIndex(
+  { student_ids: 1, status: 1, start_date: 1, end_date: 1 },
+  { name: 'ix_study_plan_audience_status_dates' },
+);
 
 db.doman_plan_assignments.createIndex(
   { created_by: 1, created_at: -1 },
@@ -633,7 +728,9 @@ db.doman_study_plans.createIndex(
 );
 
 if (
-  db.doman_daily_plans.getIndexes().some((index) => index.name === 'ux_daily_plan_student_date')
+  db.doman_daily_plans
+    .getIndexes()
+    .some((index) => index.name === 'ux_daily_plan_student_date')
 ) {
   db.doman_daily_plans.dropIndex('ux_daily_plan_student_date');
   print('dropped legacy index: ux_daily_plan_student_date');

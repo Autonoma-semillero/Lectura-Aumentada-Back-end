@@ -4,6 +4,8 @@ import { Connection, Types } from 'mongoose';
 import { MONGO_CONNECTION } from '../../../../database/mongodb.providers';
 import type {
   DomanStudyPlan,
+  DomanStudyPlanAudienceSource,
+  DomanStudyPlanAudienceStudent,
   DomanStudyPlanCategory,
   DomanStudyPlanLevel,
 } from '../../domain/interfaces/doman-study-plan.interface';
@@ -33,11 +35,49 @@ export class StudyPlansRepository implements IStudyPlansRepository {
   }
 
   private toEntity(doc: Document): DomanStudyPlan {
+    const legacyStudentId = this.objectIdToString(doc.student_id);
+    const groupIds = this.objectIdsToStrings(doc.group_ids);
+    const storedStudentIds = this.objectIdsToStrings(doc.student_ids);
+    const studentIds =
+      storedStudentIds.length > 0
+        ? storedStudentIds
+        : legacyStudentId
+          ? [legacyStudentId]
+          : [];
+    const storedDirectStudentIds = this.objectIdsToStrings(
+      doc.direct_student_ids,
+    );
+    const directStudentIds =
+      storedDirectStudentIds.length > 0
+        ? storedDirectStudentIds
+        : legacyStudentId
+          ? [legacyStudentId]
+          : [];
+    const compatibilityStudentId =
+      legacyStudentId ??
+      (groupIds.length === 0 &&
+      directStudentIds.length === 1 &&
+      studentIds.length === 1 &&
+      directStudentIds[0] === studentIds[0]
+        ? studentIds[0]
+        : undefined);
+    const students = this.toAudienceStudents(doc.students);
+    if (students.length === 0 && legacyStudentId) {
+      students.push({
+        student_id: legacyStudentId,
+        sources: [{ type: 'direct' }],
+      });
+    }
     return {
       id: (doc._id as Types.ObjectId).toHexString(),
       name: doc.name as string,
       description: doc.description as string | undefined,
-      student_id: (doc.student_id as Types.ObjectId).toHexString(),
+      student_id: compatibilityStudentId,
+      group_ids: groupIds,
+      direct_student_ids: directStudentIds,
+      student_ids: studentIds,
+      students,
+      schema_version: (doc.schema_version as number | undefined) ?? 1,
       start_date: doc.start_date as Date,
       end_date: doc.end_date as Date,
       sessions_per_day: doc.sessions_per_day as number,
@@ -64,9 +104,10 @@ export class StudyPlansRepository implements IStudyPlansRepository {
       categories: ((level.categories as Document[] | undefined) ?? []).map(
         (category): DomanStudyPlanCategory => ({
           category_id: (category.category_id as Types.ObjectId).toHexString(),
-          word_card_ids: (
-            (category.word_card_ids as Types.ObjectId[] | undefined) ?? []
-          ).map((id) => id.toHexString()),
+          target_cards_count: category.target_cards_count as number | undefined,
+          word_card_ids: Array.isArray(category.word_card_ids)
+            ? this.objectIdsToStrings(category.word_card_ids)
+            : undefined,
         }),
       ),
     };
@@ -79,13 +120,80 @@ export class StudyPlansRepository implements IStudyPlansRepository {
       order_index: level.order_index,
       start_date: level.start_date,
       end_date: level.end_date,
-      categories: level.categories.map((category) => ({
-        category_id: new Types.ObjectId(category.category_id),
-        word_card_ids: category.word_card_ids.map(
-          (id) => new Types.ObjectId(id),
-        ),
-      })),
+      categories: level.categories.map((category) => {
+        const document: Document = {
+          category_id: new Types.ObjectId(category.category_id),
+        };
+        if (category.target_cards_count !== undefined) {
+          document.target_cards_count = category.target_cards_count;
+        }
+        if (category.word_card_ids !== undefined) {
+          document.word_card_ids = category.word_card_ids.map(
+            (id) => new Types.ObjectId(id),
+          );
+        }
+        return document;
+      }),
     };
+  }
+
+  private objectIdToString(value: unknown): string | undefined {
+    if (value instanceof Types.ObjectId) {
+      return value.toHexString();
+    }
+    if (typeof value === 'string' && Types.ObjectId.isValid(value)) {
+      return value.toLowerCase();
+    }
+    return undefined;
+  }
+
+  private objectIdsToStrings(value: unknown): string[] {
+    if (!Array.isArray(value)) {
+      return [];
+    }
+    return value
+      .map((item) => this.objectIdToString(item))
+      .filter((item): item is string => item !== undefined);
+  }
+
+  private toAudienceStudents(value: unknown): DomanStudyPlanAudienceStudent[] {
+    if (!Array.isArray(value)) {
+      return [];
+    }
+    const students: DomanStudyPlanAudienceStudent[] = [];
+    for (const item of value) {
+      if (typeof item !== 'object' || item === null) {
+        continue;
+      }
+      const document = item as Document;
+      const studentId = this.objectIdToString(document.student_id);
+      if (!studentId) {
+        continue;
+      }
+      const sources: DomanStudyPlanAudienceSource[] = [];
+      if (Array.isArray(document.sources)) {
+        for (const rawSource of document.sources) {
+          if (typeof rawSource !== 'object' || rawSource === null) {
+            continue;
+          }
+          const source = rawSource as Document;
+          if (source.type === 'direct') {
+            sources.push({ type: 'direct' });
+          }
+          if (source.type === 'group') {
+            const groupId = this.objectIdToString(source.group_id);
+            if (groupId) {
+              sources.push({ type: 'group', group_id: groupId });
+            }
+          }
+        }
+      }
+      students.push({
+        student_id: studentId,
+        sources: sources.length > 0 ? sources : [{ type: 'direct' }],
+      });
+    }
+    return students;
   }
 
   async findAll(filter: StudyPlanListFilter): Promise<DomanStudyPlan[]> {
@@ -94,7 +202,8 @@ export class StudyPlansRepository implements IStudyPlansRepository {
       query.created_by = new Types.ObjectId(filter.createdBy);
     }
     if (filter.studentId) {
-      query.student_id = new Types.ObjectId(filter.studentId);
+      const studentId = new Types.ObjectId(filter.studentId);
+      query.$or = [{ student_ids: studentId }, { student_id: studentId }];
     }
     if (filter.status) {
       query.status = filter.status;
@@ -125,7 +234,10 @@ export class StudyPlansRepository implements IStudyPlansRepository {
     }
     const doc = await this.coll().findOne(
       {
-        student_id: new Types.ObjectId(studentId),
+        $or: [
+          { student_ids: new Types.ObjectId(studentId) },
+          { student_id: new Types.ObjectId(studentId) },
+        ],
         status: 'active',
         start_date: { $lte: date },
         end_date: { $gte: date },
@@ -136,16 +248,25 @@ export class StudyPlansRepository implements IStudyPlansRepository {
   }
 
   async findOverlappingActive(
-    studentId: string,
+    studentIds: string[],
     startDate: Date,
     endDate: Date,
     excludeId?: string,
   ): Promise<DomanStudyPlan | null> {
-    if (!Types.ObjectId.isValid(studentId)) {
+    const validStudentIds = [...new Set(studentIds)].filter((studentId) =>
+      Types.ObjectId.isValid(studentId),
+    );
+    if (validStudentIds.length === 0) {
       return null;
     }
+    const objectIds = validStudentIds.map(
+      (studentId) => new Types.ObjectId(studentId),
+    );
     const query: Filter<Document> = {
-      student_id: new Types.ObjectId(studentId),
+      $or: [
+        { student_ids: { $in: objectIds } },
+        { student_id: { $in: objectIds } },
+      ],
       status: 'active',
       start_date: { $lte: endDate },
       end_date: { $gte: startDate },
@@ -161,7 +282,25 @@ export class StudyPlansRepository implements IStudyPlansRepository {
     const now = new Date();
     const doc: Document = {
       name: payload.name,
-      student_id: new Types.ObjectId(payload.studentId),
+      group_ids: payload.groupIds.map((id) => new Types.ObjectId(id)),
+      direct_student_ids: payload.directStudentIds.map(
+        (id) => new Types.ObjectId(id),
+      ),
+      student_ids: payload.students.map(
+        (student) => new Types.ObjectId(student.student_id),
+      ),
+      students: payload.students.map((student) => ({
+        student_id: new Types.ObjectId(student.student_id),
+        sources: student.sources.map((source) =>
+          source.type === 'direct'
+            ? { type: 'direct' }
+            : {
+                type: 'group',
+                group_id: new Types.ObjectId(source.group_id),
+              },
+        ),
+      })),
+      schema_version: 2,
       start_date: payload.startDate,
       end_date: payload.endDate,
       sessions_per_day: payload.sessionsPerDay,
@@ -195,9 +334,6 @@ export class StudyPlansRepository implements IStudyPlansRepository {
     const $set: Document = { updated_at: new Date() };
     if (patch.name !== undefined) $set.name = patch.name;
     if (patch.description !== undefined) $set.description = patch.description;
-    if (patch.studentId !== undefined) {
-      $set.student_id = new Types.ObjectId(patch.studentId);
-    }
     if (patch.startDate !== undefined) $set.start_date = patch.startDate;
     if (patch.endDate !== undefined) $set.end_date = patch.endDate;
     if (patch.sessionsPerDay !== undefined) {

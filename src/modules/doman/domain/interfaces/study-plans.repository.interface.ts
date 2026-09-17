@@ -1,5 +1,6 @@
 import type {
   DomanStudyPlan,
+  DomanStudyPlanAudienceStudent,
   DomanStudyPlanLevel,
   DomanStudyPlanStatus,
 } from './doman-study-plan.interface';
@@ -11,7 +12,9 @@ import type {
 export interface StudyPlanInsertPayload {
   name: string;
   description?: string;
-  studentId: string;
+  groupIds: string[];
+  directStudentIds: string[];
+  students: DomanStudyPlanAudienceStudent[];
   startDate: Date;
   endDate: Date;
   sessionsPerDay: number;
@@ -26,7 +29,6 @@ export interface StudyPlanInsertPayload {
 export interface StudyPlanPatchPayload {
   name?: string;
   description?: string;
-  studentId?: string;
   startDate?: Date;
   endDate?: Date;
   sessionsPerDay?: number;
@@ -51,7 +53,7 @@ export interface IStudyPlansRepository {
     date: Date,
   ): Promise<DomanStudyPlan | null>;
   findOverlappingActive(
-    studentId: string,
+    studentIds: string[],
     startDate: Date,
     endDate: Date,
     excludeId?: string,

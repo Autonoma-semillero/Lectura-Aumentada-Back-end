@@ -1,59 +1,114 @@
-# Planes de estudio Doman configurables
+# Planes de estudio Doman con audiencia
 
 ## Objetivo
 
 Separar la configuración pedagógica de largo plazo de la ejecución diaria. Un
-docente crea un plan con nombre y duración, lo asigna a un estudiante y define
-qué tarjetas se utilizarán en cada nivel y rango de fechas. Los planes diarios
-y sus sesiones siguen siendo la unidad ejecutable consumida por la app móvil.
+docente crea un plan lógico para una audiencia compuesta por grupos, estudiantes
+directos o ambos. Los planes diarios, las sesiones y el progreso continúan siendo
+independientes por estudiante.
 
-## Colección `doman_study_plans`
+## Fotografía de audiencia
 
-Cada documento contiene:
+Los documentos v2 de `doman_study_plans` guardan:
 
-- `name`, `description`, `student_id`, `start_date` y `end_date`.
-- Valores predeterminados de ejecución: `sessions_per_day` (5 por omisión),
-  `display_ms`, `audio_mode` y `mode`.
-- Estado `draft`, `active`, `paused`, `completed` o `archived`.
-- `levels`, ordenados y sin solapamientos. Cada nivel tiene su propio rango de
-  fechas y una lista de categorías con los `word_card_ids` elegidos.
-- Auditoría mediante `created_by`, `created_at` y `updated_at`.
+- `schema_version: 2`.
+- `group_ids`: grupos seleccionados al crear el plan.
+- `direct_student_ids`: estudiantes seleccionados explícitamente.
+- `student_ids`: unión deduplicada de grupos y selección directa.
+- `students`: cada estudiante y sus fuentes `direct` y/o `group`.
 
-`created_by` también define la propiedad operativa: un docente solo puede listar,
-consultar, editar, archivar o generar días desde sus propios planes de estudio. Un
+La membresía se resuelve una sola vez al crear el plan. Añadir o retirar miembros
+de un grupo después no modifica su fotografía histórica. La audiencia admite
+como máximo 50 estudiantes únicos y no puede modificarse mediante `PATCH`.
+
+El campo legacy `student_id` se acepta únicamente como shorthand deprecado para
+crear una audiencia singleton. El repositorio también puede leer documentos
+anteriores y sintetiza para ellos las cuatro propiedades de audiencia. Para no
+romper consumidores antiguos, la respuesta también sintetiza `student_id` cuando
+un plan v2 contiene exactamente un estudiante directo y ningún grupo; el campo
+no se persiste en los documentos nuevos.
+
+## Configuración y selección de tarjetas
+
+Cada plan contiene nombre, descripción, fechas, configuración de sesiones,
+estado y niveles sin solapamientos. Una categoría v2 se representa mediante:
+
+```json
+{
+  "category_id": "ObjectId",
+  "target_cards_count": 5
+}
+```
+
+Las tarjetas no se comparten entre estudiantes: al generar un día, el backend
+busca las tarjetas elegibles del alumno y la categoría, prioriza estados `new`,
+`active` y después `completed`, y limita el resultado a
+`target_cards_count`.
+
+Para lectura compatible, una categoría legacy puede conservar
+`word_card_ids`. En ese caso se respeta la selección exacta y se filtran tarjetas
+que no pertenezcan al estudiante, a la categoría o que estén archivadas. Los
+nuevos planes de audiencia usan la regla dinámica.
+
+## Solapamientos y propiedad
+
+Un plan activo no puede solaparse con otro plan activo para ninguno de los
+estudiantes resueltos. El índice `ix_study_plan_audience_status_dates` soporta
+la consulta v2 y `ix_study_plan_student_status_dates` se conserva durante la
+compatibilidad legacy.
+
+`created_by` define la propiedad operativa: un docente solo puede listar,
+consultar, editar, archivar o generar días desde sus propios planes. Un
 administrador puede gestionar planes de cualquier docente.
-
-Solo se permite un plan activo para un estudiante en un rango de fechas
-solapado. Esta regla se valida en la capa de aplicación; el índice
-`ix_study_plan_student_status_dates` soporta la consulta.
 
 ## Materialización diaria
 
-`doman_daily_plans` conserva su función de calendario ejecutable y ahora puede
-referenciar el origen con `study_plan_id` y `study_plan_level_id`. Al preparar
-un día, el servicio localiza el nivel vigente, genera un plan diario por cada
-categoría del nivel y crea las sesiones usando únicamente las tarjetas
-seleccionadas.
+`POST /api/doman/study-plans/:id/generate-day` recorre el producto de estudiantes
+y categorías del nivel vigente con concurrencia máxima de cinco. Cada operación
+crea o reutiliza un `doman_daily_plan` individual y devuelve un resultado
+independiente:
 
-La app móvil mantiene compatibilidad con el flujo existente: si existe un plan
-activo para el estudiante y la fecha, la generación diaria adopta de forma
-automática sus sesiones, tiempo y selección de tarjetas.
-`GET /api/doman/study-plans/active` publica al estudiante únicamente las
-categorías del nivel vigente; si no hay un plan activo, el móvil conserva el
-catálogo anterior como alternativa compatible.
+```json
+{
+  "summary": { "total": 2, "generated": 1, "existing": 0, "failed": 1 },
+  "results": [
+    {
+      "student_id": "ObjectId",
+      "category_id": "ObjectId",
+      "status": "generated",
+      "plan": {}
+    },
+    {
+      "student_id": "ObjectId",
+      "category_id": "ObjectId",
+      "status": "failed",
+      "error": "No available word cards to generate the daily plan"
+    }
+  ]
+}
+```
 
-## Gestión y restauración de sesiones
+Un fallo individual no revierte los planes generados para otros estudiantes.
+`doman_daily_plans.study_plan_id` y `study_plan_level_id` conservan el origen;
+sesiones, tarjetas de sesión, exposiciones y progreso permanecen ligados al
+`student_id` individual.
 
-El administrador puede añadir hasta 10 sesiones a un plan diario, eliminar una
-sesión o todas las sesiones del día y restaurarlas individualmente o por día.
-Restaurar devuelve la sesión a `planned` y limpia las marcas operativas de
-inicio, finalización, visualización y audio. Los logs históricos de exposición
-se conservan al restaurar para no falsear el progreso acumulado; se eliminan
-cuando la sesión se borra explícitamente.
+Como la materialización ocurre dentro de una función HTTP, cada nivel admite
+como máximo 100 combinaciones estudiante-categoría y 10.000 asignaciones
+estimadas de tarjeta-sesión por día. El límite se valida al crear, actualizar y
+generar, de modo que una configuración imposible de procesar no quede guardada.
+
+## Compatibilidad móvil
+
+`GET /api/doman/study-plans/active?student_id=...` conserva su contrato. Busca
+el estudiante tanto en `student_ids` v2 como en `student_id` legacy y publica las
+categorías del nivel vigente con la cantidad realmente disponible para ese
+alumno. La generación normal de planes diarios adopta automáticamente la regla
+del plan activo.
 
 ## Fuente canónica
 
-El validador y los índices están en
-`db/mongo/lectura_aumentada_full_schema.mongosh.js`. El módulo Nest vive en
-`src/modules/doman/` y respeta controller → service → repositorio de dominio →
-MongoDB.
+El validador y los índices viven en
+`db/mongo/lectura_aumentada_full_schema.mongosh.js`. El schema Mongoose del
+módulo refleja el mismo contrato, aunque la persistencia se realiza mediante el
+repositorio y la conexión Mongo compartida.

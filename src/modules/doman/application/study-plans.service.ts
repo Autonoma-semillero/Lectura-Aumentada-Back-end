@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ConflictException,
   ForbiddenException,
+  HttpException,
   Inject,
   Injectable,
   NotFoundException,
@@ -9,10 +10,19 @@ import {
 import { randomBytes } from 'crypto';
 import { CategoriesService } from '../../categories/application/categories.service';
 import { WORD_CARDS_REPOSITORY } from '../../categories/domain/constants/categories.tokens';
+import type { WordCardListed } from '../../categories/domain/interfaces/word-card-listed.interface';
 import type { IWordCardsRepository } from '../../categories/domain/interfaces/word-cards.repository.interface';
+import { GroupsService } from '../../groups/application/groups.service';
+import type { GroupsRequester } from '../../groups/domain/types/groups-requester.type';
+import {
+  MAX_DOMAN_BULK_AUDIENCE_SIZE,
+  MAX_DOMAN_STUDY_PLAN_DAY_JOBS,
+  MAX_DOMAN_STUDY_PLAN_DAY_SESSION_CARDS,
+} from '../domain/constants/doman-limits.constants';
 import { STUDY_PLANS_REPOSITORY } from '../domain/constants/doman.tokens';
 import type {
   DomanStudyPlan,
+  DomanStudyPlanCategory,
   DomanStudyPlanLevel,
 } from '../domain/interfaces/doman-study-plan.interface';
 import type { IStudyPlansRepository } from '../domain/interfaces/study-plans.repository.interface';
@@ -22,9 +32,9 @@ import {
   StudyPlanLevelDto,
 } from '../dto/create-study-plan.dto';
 import { GenerateStudyPlanDayDto } from '../dto/generate-study-plan-day.dto';
+import { GetActiveStudyPlanQueryDto } from '../dto/get-active-study-plan-query.dto';
 import { ListStudyPlansQueryDto } from '../dto/list-study-plans-query.dto';
 import { UpdateStudyPlanDto } from '../dto/update-study-plan.dto';
-import { GetActiveStudyPlanQueryDto } from '../dto/get-active-study-plan-query.dto';
 import {
   assertCanAccessStudent,
   assertCanManageDoman,
@@ -36,6 +46,26 @@ import {
   todayPlanDateUtcMidnight,
 } from './plan-date.util';
 
+type StudyPlanDayResult = {
+  student_id: string;
+  category_id: string;
+  status: 'generated' | 'existing' | 'failed';
+  plan?: Awaited<
+    ReturnType<DailyPlansService['generateForAssignment']>
+  >['plan'];
+  error?: string;
+};
+
+type StudyPlanDayResponse = {
+  summary: {
+    total: number;
+    generated: number;
+    existing: number;
+    failed: number;
+  };
+  results: StudyPlanDayResult[];
+};
+
 @Injectable()
 export class StudyPlansService {
   constructor(
@@ -44,6 +74,7 @@ export class StudyPlansService {
     @Inject(WORD_CARDS_REPOSITORY)
     private readonly wordCardsRepository: IWordCardsRepository,
     private readonly categoriesService: CategoriesService,
+    private readonly groupsService: GroupsService,
     private readonly dailyPlansService: DailyPlansService,
   ) {}
 
@@ -93,16 +124,17 @@ export class StudyPlansService {
     }
     const categories = await Promise.all(
       level.categories.map(async (selection) => {
-        const category = await this.categoriesService.findById(
-          selection.category_id,
-        );
+        const [category, availableCards] = await Promise.all([
+          this.categoriesService.findById(selection.category_id),
+          this.resolveConfiguredCards(selection, query.student_id),
+        ]);
         return {
           id: category.id,
           name: category.name,
           slug: category.slug,
           description: category.description,
           icon: category.icon,
-          available_word_cards_count: selection.word_card_ids.length,
+          available_word_cards_count: availableCards.length,
         };
       }),
     );
@@ -125,18 +157,64 @@ export class StudyPlansService {
     if (!name) {
       throw new BadRequestException('name must not be empty');
     }
+    const groupIds = [
+      ...new Set((dto.group_ids ?? []).map((id) => id.toLowerCase())),
+    ];
+    const directStudentIds = [
+      ...new Set(
+        [
+          ...(dto.student_ids ?? []),
+          ...(dto.student_id ? [dto.student_id] : []),
+        ].map((id) => id.toLowerCase()),
+      ),
+    ];
+    if (groupIds.length === 0 && directStudentIds.length === 0) {
+      throw new BadRequestException(
+        'At least one group_id, student_id or student_ids value is required',
+      );
+    }
+    const groupsRequester: GroupsRequester = {
+      userId: requester.userId,
+      role: requester.role === 'admin' ? 'admin' : 'teacher',
+    };
+    const audience = await this.groupsService.resolveAudience(
+      groupIds,
+      directStudentIds,
+      groupsRequester,
+    );
+    if (audience.student_ids.length === 0) {
+      throw new BadRequestException('The selected audience has no students');
+    }
+    if (audience.student_ids.length > MAX_DOMAN_BULK_AUDIENCE_SIZE) {
+      throw new BadRequestException(
+        `The resolved audience cannot exceed ${MAX_DOMAN_BULK_AUDIENCE_SIZE} students`,
+      );
+    }
+
     const startDate = planDateToUtcMidnight(dto.start_date);
     const endDate = planDateToUtcMidnight(dto.end_date);
     this.assertDateRange(startDate, endDate);
+    const legacyExactStudentId =
+      groupIds.length === 0 &&
+      (dto.student_ids?.length ?? 0) === 0 &&
+      dto.student_id
+        ? dto.student_id
+        : undefined;
     const levels = await this.buildAndValidateLevels(
       dto.levels,
-      dto.student_id,
       startDate,
       endDate,
+      legacyExactStudentId,
+    );
+    const sessionsPerDay = dto.sessions_per_day ?? 5;
+    this.assertGenerationWorkload(
+      audience.student_ids.length,
+      sessionsPerDay,
+      levels,
     );
     const status = dto.status ?? 'active';
     await this.assertNoActiveOverlap(
-      dto.student_id,
+      audience.student_ids,
       startDate,
       endDate,
       status,
@@ -145,10 +223,12 @@ export class StudyPlansService {
     return this.studyPlansRepository.create({
       name,
       description: dto.description?.trim(),
-      studentId: dto.student_id,
+      groupIds,
+      directStudentIds,
+      students: audience.students,
       startDate,
       endDate,
-      sessionsPerDay: dto.sessions_per_day ?? 5,
+      sessionsPerDay,
       displayMs: dto.display_ms ?? 2200,
       audioMode: dto.audio_mode ?? 'manual',
       mode: dto.mode ?? 'auto',
@@ -165,10 +245,25 @@ export class StudyPlansService {
   ): Promise<DomanStudyPlan> {
     assertCanManageDoman(requester);
     const existing = await this.requireManagedPlan(id, requester);
+    if (dto.group_ids !== undefined || dto.student_ids !== undefined) {
+      throw new BadRequestException(
+        'Study plan audience is immutable and cannot be changed by PATCH',
+      );
+    }
+    if (
+      dto.student_id !== undefined &&
+      !(
+        existing.student_ids.length === 1 &&
+        isSameObjectId(existing.student_ids[0], dto.student_id)
+      )
+    ) {
+      throw new BadRequestException(
+        'Study plan audience is immutable and cannot be changed by PATCH',
+      );
+    }
     if (dto.name !== undefined && !dto.name.trim()) {
       throw new BadRequestException('name must not be empty');
     }
-    const studentId = dto.student_id ?? existing.student_id;
     const startDate = dto.start_date
       ? planDateToUtcMidnight(dto.start_date)
       : existing.start_date;
@@ -176,31 +271,36 @@ export class StudyPlansService {
       ? planDateToUtcMidnight(dto.end_date)
       : existing.end_date;
     this.assertDateRange(startDate, endDate);
-    if (
-      dto.student_id &&
-      dto.student_id !== existing.student_id &&
-      !dto.levels
-    ) {
-      throw new BadRequestException(
-        'levels are required when changing the study plan student',
-      );
-    }
+    const legacyExactStudentId = this.hasLegacyExactSelections(existing)
+      ? existing.student_ids[0]
+      : undefined;
     const levels = dto.levels
       ? await this.buildAndValidateLevels(
           dto.levels,
-          studentId,
           startDate,
           endDate,
+          legacyExactStudentId,
         )
       : existing.levels;
     this.assertLevelsInsidePlan(levels, startDate, endDate);
+    const sessionsPerDay = dto.sessions_per_day ?? existing.sessions_per_day;
+    this.assertGenerationWorkload(
+      existing.student_ids.length,
+      sessionsPerDay,
+      levels,
+    );
     const status = dto.status ?? existing.status;
-    await this.assertNoActiveOverlap(studentId, startDate, endDate, status, id);
+    await this.assertNoActiveOverlap(
+      existing.student_ids,
+      startDate,
+      endDate,
+      status,
+      id,
+    );
 
     const updated = await this.studyPlansRepository.update(id, {
       name: dto.name?.trim(),
       description: dto.description?.trim(),
-      studentId: dto.student_id,
       startDate: dto.start_date ? startDate : undefined,
       endDate: dto.end_date ? endDate : undefined,
       sessionsPerDay: dto.sessions_per_day,
@@ -226,7 +326,7 @@ export class StudyPlansService {
     id: string,
     dto: GenerateStudyPlanDayDto,
     requester: DomanRequester,
-  ): Promise<unknown[]> {
+  ): Promise<StudyPlanDayResponse> {
     assertCanManageDoman(requester);
     const plan = await this.requireManagedPlan(id, requester);
     if (plan.status !== 'active') {
@@ -246,23 +346,66 @@ export class StudyPlansService {
         'No study plan level is scheduled for this date',
       );
     }
+    this.assertGenerationWorkload(
+      plan.student_ids.length,
+      plan.sessions_per_day,
+      [level],
+    );
 
-    const summaries: unknown[] = [];
-    for (const category of level.categories) {
-      summaries.push(
-        await this.dailyPlansService.generate(
-          {
-            student_id: plan.student_id,
-            study_plan_id: plan.id,
-            category_id: category.category_id,
-            plan_date: date.toISOString().slice(0, 10),
-            force: dto.force ?? false,
-          },
-          requester,
-        ),
-      );
-    }
-    return summaries;
+    const jobs = plan.student_ids.flatMap((studentId) =>
+      level.categories.map((category) => ({ studentId, category })),
+    );
+    const results = new Array<StudyPlanDayResult>(jobs.length);
+    let nextIndex = 0;
+    const workers = Array.from(
+      { length: Math.min(5, jobs.length) },
+      async () => {
+        while (nextIndex < jobs.length) {
+          const index = nextIndex;
+          nextIndex += 1;
+          const job = jobs[index];
+          try {
+            const generated =
+              await this.dailyPlansService.generateForAssignment(
+                {
+                  student_id: job.studentId,
+                  study_plan_id: plan.id,
+                  category_id: job.category.category_id,
+                  plan_date: date.toISOString().slice(0, 10),
+                  target_cards_count: job.category.target_cards_count,
+                  force: dto.force ?? false,
+                },
+                requester,
+              );
+            results[index] = {
+              student_id: job.studentId,
+              category_id: job.category.category_id,
+              status: generated.status,
+              plan: generated.plan,
+            };
+          } catch (error) {
+            results[index] = {
+              student_id: job.studentId,
+              category_id: job.category.category_id,
+              status: 'failed',
+              error: this.toPublicError(error),
+            };
+          }
+        }
+      },
+    );
+    await Promise.all(workers);
+    return {
+      summary: {
+        total: results.length,
+        generated: results.filter((result) => result.status === 'generated')
+          .length,
+        existing: results.filter((result) => result.status === 'existing')
+          .length,
+        failed: results.filter((result) => result.status === 'failed').length,
+      },
+      results,
+    };
   }
 
   private async requirePlan(id: string): Promise<DomanStudyPlan> {
@@ -289,9 +432,9 @@ export class StudyPlansService {
 
   private async buildAndValidateLevels(
     levelDtos: StudyPlanLevelDto[],
-    studentId: string,
     planStart: Date,
     planEnd: Date,
+    legacyExactStudentId?: string,
   ): Promise<DomanStudyPlanLevel[]> {
     const levels = levelDtos
       .map((level) => ({
@@ -300,10 +443,31 @@ export class StudyPlansService {
         order_index: level.order_index,
         start_date: planDateToUtcMidnight(level.start_date),
         end_date: planDateToUtcMidnight(level.end_date),
-        categories: level.categories.map((category) => ({
-          category_id: category.category_id,
-          word_card_ids: [...category.word_card_ids],
-        })),
+        categories: level.categories.map((category) => {
+          if (
+            category.word_card_ids !== undefined &&
+            category.target_cards_count !== undefined
+          ) {
+            throw new BadRequestException(
+              'A study plan category cannot define both target_cards_count and word_card_ids',
+            );
+          }
+          if (category.word_card_ids !== undefined) {
+            if (!legacyExactStudentId) {
+              throw new BadRequestException(
+                'word_card_ids is only supported by the deprecated singleton audience; use target_cards_count for audience plans',
+              );
+            }
+            return {
+              category_id: category.category_id,
+              word_card_ids: [...category.word_card_ids],
+            };
+          }
+          return {
+            category_id: category.category_id,
+            target_cards_count: category.target_cards_count ?? 5,
+          };
+        }),
       }))
       .sort((left, right) => left.order_index - right.order_index);
 
@@ -335,10 +499,21 @@ export class StudyPlansService {
       }
       for (const category of level.categories) {
         await this.categoriesService.findById(category.category_id);
-        const cards = await this.wordCardsRepository.findByIds(
-          category.word_card_ids,
-        );
-        if (cards.length !== category.word_card_ids.length) {
+        if (category.target_cards_count !== undefined) {
+          if (
+            !Number.isInteger(category.target_cards_count) ||
+            category.target_cards_count < 1 ||
+            category.target_cards_count > 50
+          ) {
+            throw new BadRequestException(
+              'target_cards_count must be an integer between 1 and 50',
+            );
+          }
+          continue;
+        }
+        const wordCardIds = category.word_card_ids ?? [];
+        const cards = await this.wordCardsRepository.findByIds(wordCardIds);
+        if (cards.length !== wordCardIds.length) {
           throw new BadRequestException(
             'One or more selected word cards do not exist',
           );
@@ -346,8 +521,9 @@ export class StudyPlansService {
         if (
           cards.some(
             (card) =>
-              card.student_id !== studentId ||
-              card.category_id !== category.category_id ||
+              !legacyExactStudentId ||
+              !isSameObjectId(card.student_id, legacyExactStudentId) ||
+              !isSameObjectId(card.category_id ?? '', category.category_id) ||
               card.status === 'archived',
           )
         ) {
@@ -381,8 +557,38 @@ export class StudyPlansService {
     }
   }
 
+  private assertGenerationWorkload(
+    studentCount: number,
+    sessionsPerDay: number,
+    levels: DomanStudyPlanLevel[],
+  ): void {
+    for (const level of levels) {
+      const jobs = studentCount * level.categories.length;
+      if (jobs > MAX_DOMAN_STUDY_PLAN_DAY_JOBS) {
+        throw new BadRequestException(
+          `A study plan day cannot exceed ${MAX_DOMAN_STUDY_PLAN_DAY_JOBS} student-category jobs`,
+        );
+      }
+      const cardsPerStudent = level.categories.reduce(
+        (total, category) =>
+          total +
+          (category.target_cards_count ?? category.word_card_ids?.length ?? 5),
+        0,
+      );
+      const estimatedSessionCards =
+        studentCount * sessionsPerDay * cardsPerStudent;
+      if (
+        estimatedSessionCards > MAX_DOMAN_STUDY_PLAN_DAY_SESSION_CARDS
+      ) {
+        throw new BadRequestException(
+          `A study plan day cannot exceed ${MAX_DOMAN_STUDY_PLAN_DAY_SESSION_CARDS} estimated session-card assignments`,
+        );
+      }
+    }
+  }
+
   private async assertNoActiveOverlap(
-    studentId: string,
+    studentIds: string[],
     startDate: Date,
     endDate: Date,
     status: DomanStudyPlan['status'],
@@ -392,14 +598,14 @@ export class StudyPlansService {
       return;
     }
     const overlapping = await this.studyPlansRepository.findOverlappingActive(
-      studentId,
+      studentIds,
       startDate,
       endDate,
       excludeId,
     );
     if (overlapping) {
       throw new ConflictException(
-        'The student already has an active study plan in this date range',
+        'At least one student already has an active study plan in this date range',
       );
     }
   }
@@ -411,5 +617,77 @@ export class StudyPlansService {
     return plan.levels.find(
       (level) => level.start_date <= date && level.end_date >= date,
     );
+  }
+
+  private hasLegacyExactSelections(plan: DomanStudyPlan): boolean {
+    return (
+      plan.student_ids.length === 1 &&
+      plan.levels.some((level) =>
+        level.categories.some(
+          (category) => category.word_card_ids !== undefined,
+        ),
+      )
+    );
+  }
+
+  private async resolveConfiguredCards(
+    category: DomanStudyPlanCategory,
+    studentId: string,
+  ): Promise<WordCardListed[]> {
+    if (category.word_card_ids !== undefined) {
+      const cards = await this.wordCardsRepository.findByIds(
+        category.word_card_ids,
+      );
+      return cards.filter(
+        (card) =>
+          isSameObjectId(card.student_id, studentId) &&
+          isSameObjectId(card.category_id ?? '', category.category_id) &&
+          card.status !== 'archived',
+      );
+    }
+    const limit = category.target_cards_count ?? 5;
+    const primary =
+      await this.wordCardsRepository.listByStudentCategoryAndStatuses(
+        studentId,
+        category.category_id,
+        ['new', 'active'],
+      );
+    let candidates = primary;
+    if (candidates.length < limit) {
+      const completed =
+        await this.wordCardsRepository.listByStudentCategoryAndStatuses(
+          studentId,
+          category.category_id,
+          ['completed'],
+        );
+      candidates = candidates.concat(completed);
+    }
+    return candidates.slice(0, limit);
+  }
+
+  private toPublicError(error: unknown): string {
+    if (error instanceof HttpException) {
+      const response = error.getResponse();
+      if (typeof response === 'string') {
+        return response.slice(0, 500);
+      }
+      if (
+        typeof response === 'object' &&
+        response !== null &&
+        'message' in response
+      ) {
+        const message = (response as { message?: unknown }).message;
+        if (typeof message === 'string') {
+          return message.slice(0, 500);
+        }
+        if (Array.isArray(message)) {
+          return message
+            .filter((value): value is string => typeof value === 'string')
+            .join(', ')
+            .slice(0, 500);
+        }
+      }
+    }
+    return 'The daily plan could not be generated for this student';
   }
 }

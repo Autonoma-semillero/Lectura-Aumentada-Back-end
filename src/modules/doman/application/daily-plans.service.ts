@@ -46,6 +46,7 @@ import {
   planDateToUtcMidnight,
   todayPlanDateUtcMidnight,
 } from './plan-date.util';
+import { sortDomanCardsByPriority } from './word-card-selection.util';
 
 @Injectable()
 export class DailyPlansService {
@@ -144,16 +145,7 @@ export class DailyPlansService {
       const sessions = await this.sessionsRepository.findByDailyPlanId(
         existing.id,
       );
-      const cards = studyContext
-        ? await this.resolveConfiguredCards(
-            studyContext.category,
-            existing.student_id,
-          )
-        : await this.resolveCards(
-            existing.student_id,
-            existing.category_id,
-            existing.target_cards_count,
-          );
+      const cards = await this.resolvePersistedCards(sessions);
       return this.toSummary(existing, sessions, cards);
     }
     return this.generatePlan({
@@ -216,7 +208,11 @@ export class DailyPlansService {
       dto.study_plan_id,
       dto.category_id,
     );
-    let targetCardsCount = this.clamp(dto.target_cards_count ?? 5, 1, 50);
+    let targetCardsCount = this.clamp(
+      dto.target_cards_count ?? studyContext?.category.target_cards_count ?? 5,
+      1,
+      50,
+    );
     const targetSessionsCount = this.clamp(
       dto.target_sessions_count ?? studyContext?.plan.sessions_per_day ?? 5,
       1,
@@ -240,6 +236,37 @@ export class DailyPlansService {
     }
     await this.categoriesService.findById(categoryId);
 
+    const existing = await this.dailyPlansRepository.findByStudentAndPlanDate(
+      dto.student_id,
+      planDate,
+      categoryId,
+    );
+    let existingSessions: Array<{
+      id: string;
+      status: string;
+      session_index: number;
+    }> = [];
+    if (existing) {
+      existingSessions = await this.sessionsRepository.findByDailyPlanId(
+        existing.id,
+      );
+      if (!force) {
+        const persistedCards =
+          await this.resolvePersistedCards(existingSessions);
+        return {
+          status: 'existing',
+          plan: this.toSummary(existing, existingSessions, persistedCards),
+        };
+      }
+      if (
+        existingSessions.some((session) => session.status === 'completed')
+      ) {
+        throw new ConflictException(
+          'Cannot regenerate a daily plan with completed sessions',
+        );
+      }
+    }
+
     const selectedCards = studyContext
       ? await this.resolveConfiguredCards(studyContext.category, dto.student_id)
       : await this.resolveCards(dto.student_id, categoryId, targetCardsCount);
@@ -249,12 +276,6 @@ export class DailyPlansService {
       );
     }
     targetCardsCount = selectedCards.length;
-
-    const existing = await this.dailyPlansRepository.findByStudentAndPlanDate(
-      dto.student_id,
-      planDate,
-      categoryId,
-    );
 
     let plan: DomanDailyPlan;
     let createdNewPlan = false;
@@ -267,30 +288,15 @@ export class DailyPlansService {
         categoryId,
         studyPlanId: studyContext?.plan.id,
         studyPlanLevelId: studyContext?.level.id,
-        algorithmVersion: studyContext ? 'doman-study-plan-v1' : 'doman-mvp-v1',
+        algorithmVersion: studyContext
+          ? this.studyPlanAlgorithmVersion(studyContext.plan)
+          : 'doman-mvp-v1',
         notes: studyContext
           ? `Generated from study plan: ${studyContext.plan.name}`
           : 'Auto-generated daily plan',
       });
       createdNewPlan = true;
     } else {
-      const existingSessions = await this.sessionsRepository.findByDailyPlanId(
-        existing.id,
-      );
-      if (!force) {
-        return {
-          status: 'existing',
-          plan: this.toSummary(existing, existingSessions, selectedCards),
-        };
-      }
-      if (
-        force &&
-        existingSessions.some((session) => session.status === 'completed')
-      ) {
-        throw new ConflictException(
-          'Cannot regenerate a daily plan with completed sessions',
-        );
-      }
       await this.sessionCardsRepository.deleteBySessionIds(
         existingSessions.map((session) => session.id),
       );
@@ -301,7 +307,9 @@ export class DailyPlansService {
         categoryId,
         studyPlanId: studyContext?.plan.id,
         studyPlanLevelId: studyContext?.level.id,
-        algorithmVersion: studyContext ? 'doman-study-plan-v1' : 'doman-mvp-v1',
+        algorithmVersion: studyContext
+          ? this.studyPlanAlgorithmVersion(studyContext.plan)
+          : 'doman-mvp-v1',
         notes: force ? 'Regenerated daily plan' : 'Generated daily plan',
       });
       if (!updated) {
@@ -508,21 +516,47 @@ export class DailyPlansService {
         );
       candidateCards = candidateCards.concat(fallback);
     }
-    return sortCardsByPriority(candidateCards).slice(0, limit);
+    return sortDomanCardsByPriority(candidateCards).slice(0, limit);
+  }
+
+  private async resolvePersistedCards(
+    sessions: Array<{ id: string; session_index: number }>,
+  ): Promise<WordCardListed[]> {
+    const orderedSessions = [...sessions].sort(
+      (left, right) => left.session_index - right.session_index,
+    );
+    for (const session of orderedSessions) {
+      const sessionCards =
+        await this.sessionCardsRepository.listBySessionId(session.id);
+      const cards = sessionCards
+        .map((sessionCard) => sessionCard.word_card)
+        .filter((card): card is WordCardListed => card !== undefined);
+      if (cards.length > 0) {
+        return cards;
+      }
+    }
+    return [];
   }
 
   private async resolveConfiguredCards(
     category: DomanStudyPlanCategory,
     studentId: string,
   ): Promise<WordCardListed[]> {
-    const cards = await this.wordCardsRepository.findByIds(
-      category.word_card_ids,
-    );
-    return cards.filter(
-      (card) =>
-        card.student_id === studentId &&
-        card.category_id === category.category_id &&
-        card.status !== 'archived',
+    if (category.word_card_ids !== undefined) {
+      const cards = await this.wordCardsRepository.findByIds(
+        category.word_card_ids,
+      );
+      return cards.filter(
+        (card) =>
+          isSameObjectId(card.student_id, studentId) &&
+          isSameObjectId(card.category_id ?? '', category.category_id) &&
+          card.status !== 'archived',
+      );
+    }
+    return this.resolveCards(
+      studentId,
+      category.category_id,
+      category.target_cards_count ?? 5,
     );
   }
 
@@ -549,7 +583,9 @@ export class DailyPlansService {
       return null;
     }
     if (
-      plan.student_id !== studentId ||
+      !plan.student_ids.some((candidate) =>
+        isSameObjectId(candidate, studentId),
+      ) ||
       plan.status !== 'active' ||
       planDate < plan.start_date ||
       planDate > plan.end_date
@@ -578,6 +614,12 @@ export class DailyPlansService {
       );
     }
     return { plan, level, category };
+  }
+
+  private studyPlanAlgorithmVersion(plan: DomanStudyPlan): string {
+    return plan.schema_version >= 2
+      ? 'doman-study-plan-v2'
+      : 'doman-study-plan-v1';
   }
 
   private clamp(value: number, min: number, max: number): number {
@@ -635,26 +677,4 @@ export class DailyPlansService {
       (error.code === 11000 || error.code === 11001)
     );
   }
-}
-
-const statusPriority = new Map<string, number>([
-  ['new', 0],
-  ['active', 1],
-  ['completed', 2],
-  ['archived', 3],
-]);
-
-function sortCardsByPriority(cards: WordCardListed[]): WordCardListed[] {
-  return [...cards].sort((left, right) => {
-    const byStatus =
-      (statusPriority.get(left.status) ?? 99) -
-      (statusPriority.get(right.status) ?? 99);
-    if (byStatus !== 0) {
-      return byStatus;
-    }
-    if (left.times_shown !== right.times_shown) {
-      return left.times_shown - right.times_shown;
-    }
-    return left.word.localeCompare(right.word, 'es');
-  });
 }

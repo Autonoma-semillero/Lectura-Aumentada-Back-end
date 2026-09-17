@@ -3,6 +3,7 @@ import { ApiPropertyOptional } from '@nestjs/swagger';
 import {
   ArrayMaxSize,
   ArrayMinSize,
+  ArrayUnique,
   IsArray,
   IsDateString,
   IsIn,
@@ -42,10 +43,38 @@ export class UpdateStudyPlanDto {
   @MaxLength(500)
   description?: string;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({
+    deprecated: true,
+    description:
+      'La audiencia es inmutable; enviar este campo produce Bad Request.',
+  })
   @IsOptional()
   @IsMongoId()
   student_id?: string;
+
+  @ApiPropertyOptional({
+    type: [String],
+    description:
+      'La audiencia es inmutable; este campo solo permite devolver un error de contrato explícito.',
+  })
+  @IsOptional()
+  @IsArray()
+  @ArrayUnique()
+  @ArrayMaxSize(100)
+  @IsMongoId({ each: true })
+  group_ids?: string[];
+
+  @ApiPropertyOptional({
+    type: [String],
+    description:
+      'La audiencia es inmutable; este campo solo permite devolver un error de contrato explícito.',
+  })
+  @IsOptional()
+  @IsArray()
+  @ArrayUnique()
+  @ArrayMaxSize(200)
+  @IsMongoId({ each: true })
+  student_ids?: string[];
 
   @ApiPropertyOptional({ type: String, format: 'date' })
   @IsOptional()

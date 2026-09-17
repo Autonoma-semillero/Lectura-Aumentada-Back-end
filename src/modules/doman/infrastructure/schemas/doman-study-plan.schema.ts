@@ -3,7 +3,30 @@ import { Schema } from 'mongoose';
 const StudyPlanCategorySchema = new Schema(
   {
     category_id: { type: Schema.Types.ObjectId, required: true },
-    word_card_ids: [{ type: Schema.Types.ObjectId, required: true }],
+    target_cards_count: { type: Number, min: 1, max: 50 },
+    word_card_ids: {
+      type: [{ type: Schema.Types.ObjectId }],
+      default: undefined,
+    },
+  },
+  { _id: false },
+);
+
+const StudyPlanAudienceSourceSchema = new Schema(
+  {
+    type: { type: String, enum: ['direct', 'group'], required: true },
+    group_id: { type: Schema.Types.ObjectId },
+  },
+  { _id: false },
+);
+
+const StudyPlanAudienceStudentSchema = new Schema(
+  {
+    student_id: { type: Schema.Types.ObjectId, required: true },
+    sources: {
+      type: [StudyPlanAudienceSourceSchema],
+      required: true,
+    },
   },
   { _id: false },
 );
@@ -23,7 +46,12 @@ export const DomanStudyPlanSchema = new Schema(
   {
     name: { type: String, required: true },
     description: { type: String },
-    student_id: { type: Schema.Types.ObjectId, required: true },
+    student_id: { type: Schema.Types.ObjectId },
+    schema_version: { type: Number, default: 2 },
+    group_ids: [{ type: Schema.Types.ObjectId }],
+    direct_student_ids: [{ type: Schema.Types.ObjectId }],
+    student_ids: [{ type: Schema.Types.ObjectId }],
+    students: { type: [StudyPlanAudienceStudentSchema] },
     start_date: { type: Date, required: true },
     end_date: { type: Date, required: true },
     sessions_per_day: { type: Number, required: true, default: 5 },

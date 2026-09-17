@@ -123,7 +123,9 @@ describe('DomanSessionsService', () => {
       { categoryId: otherCategoryId, count: 4 },
       { categoryId, count: 4 },
     ]);
-    dailyPlansRepository.findByStudentAndPlanDate.mockResolvedValue(buildPlan());
+    dailyPlansRepository.findByStudentAndPlanDate.mockResolvedValue(
+      buildPlan(),
+    );
     sessionsRepository.findByDailyPlanId.mockResolvedValue([buildSession()]);
     sessionCardsRepository.listBySessionId.mockResolvedValue([]);
 
@@ -143,7 +145,9 @@ describe('DomanSessionsService', () => {
         studentRequester,
       ),
     ).rejects.toBeInstanceOf(ForbiddenException);
-    expect(dailyPlansRepository.findByStudentAndPlanDate).not.toHaveBeenCalled();
+    expect(
+      dailyPlansRepository.findByStudentAndPlanDate,
+    ).not.toHaveBeenCalled();
   });
 
   it('impide que un estudiante liste sesiones de un plan ajeno', async () => {
@@ -158,9 +162,9 @@ describe('DomanSessionsService', () => {
   it('impide iniciar una sesión de otro estudiante', async () => {
     sessionsRepository.findById.mockResolvedValue(buildSession(otherStudentId));
 
-    await expect(service.start(sessionId, studentRequester)).rejects.toBeInstanceOf(
-      ForbiddenException,
-    );
+    await expect(
+      service.start(sessionId, studentRequester),
+    ).rejects.toBeInstanceOf(ForbiddenException);
     expect(sessionsRepository.update).not.toHaveBeenCalled();
   });
 
@@ -280,6 +284,66 @@ describe('DomanSessionsService', () => {
     expect(
       wordCardsRepository.listByStudentCategoryAndStatuses,
     ).not.toHaveBeenCalled();
+  });
+
+  it('resuelve tarjetas v2 por estudiante y conserva el límite del plan diario', async () => {
+    const studyPlanId = '507f1f77bcf86cd799439061';
+    const levelId = '507f1f77bcf86cd799439062';
+    const plan = {
+      ...buildPlan(),
+      target_cards_count: 2,
+      study_plan_id: studyPlanId,
+      study_plan_level_id: levelId,
+    };
+    const created = buildSession();
+    dailyPlansRepository.findById.mockResolvedValue(plan);
+    sessionsRepository.findByDailyPlanId
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([created]);
+    studyPlansRepository.findById.mockResolvedValue({
+      id: studyPlanId,
+      levels: [
+        {
+          id: levelId,
+          categories: [{ category_id: categoryId, target_cards_count: 5 }],
+        },
+      ],
+    });
+    wordCardsRepository.listByStudentCategoryAndStatuses.mockImplementation(
+      async (_studentId: string, _categoryId: string, statuses: string[]) =>
+        statuses.includes('completed')
+          ? []
+          : ['gato', 'árbol', 'perro'].map((word, index) => ({
+              id: `507f1f77bcf86cd79943907${index}`,
+              student_id: studentId,
+              category_id: categoryId,
+              word,
+              status: 'active',
+              initial_letter: word[0],
+              times_shown: index,
+              created_at: now,
+              updated_at: now,
+            })),
+    );
+    sessionsRepository.create.mockResolvedValue(created);
+
+    await service.addToDailyPlan(planId, { count: 1 }, teacherRequester);
+
+    expect(
+      wordCardsRepository.listByStudentCategoryAndStatuses,
+    ).toHaveBeenCalledWith(studentId, categoryId, ['new', 'active']);
+    expect(sessionCardsRepository.createMany).toHaveBeenCalledWith([
+      {
+        sessionId,
+        wordCardId: '507f1f77bcf86cd799439070',
+        orderIndex: 0,
+      },
+      {
+        sessionId,
+        wordCardId: '507f1f77bcf86cd799439071',
+        orderIndex: 1,
+      },
+    ]);
   });
 
   it('restaura una sesión sin eliminar el historial de exposición', async () => {
