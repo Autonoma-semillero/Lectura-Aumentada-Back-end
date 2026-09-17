@@ -57,6 +57,46 @@ ensureCollection('users', {
   },
 });
 
+ensureCollection('student_groups', {
+  $jsonSchema: {
+    bsonType: 'object',
+    required: [
+      'name',
+      'normalized_name',
+      'teacher_id',
+      'status',
+      'created_by',
+      'created_at',
+      'updated_at',
+    ],
+    additionalProperties: true,
+    properties: {
+      name: { bsonType: 'string', minLength: 1, maxLength: 100 },
+      normalized_name: { bsonType: 'string', minLength: 1, maxLength: 100 },
+      description: { bsonType: 'string', maxLength: 500 },
+      teacher_id: { bsonType: 'objectId' },
+      status: { enum: ['active', 'archived'] },
+      created_by: { bsonType: 'objectId' },
+      created_at: { bsonType: 'date' },
+      updated_at: { bsonType: 'date' },
+    },
+  },
+});
+
+ensureCollection('student_group_memberships', {
+  $jsonSchema: {
+    bsonType: 'object',
+    required: ['group_id', 'student_id', 'added_by', 'created_at'],
+    additionalProperties: true,
+    properties: {
+      group_id: { bsonType: 'objectId' },
+      student_id: { bsonType: 'objectId' },
+      added_by: { bsonType: 'objectId' },
+      created_at: { bsonType: 'date' },
+    },
+  },
+});
+
 ensureCollection('categories', {
   $jsonSchema: {
     bsonType: 'object',
@@ -143,6 +183,31 @@ db.users.createIndex(
   { unique: true, sparse: true, name: 'ux_users_username' },
 );
 db.users.createIndex({ status: 1 }, { name: 'ix_users_status' });
+
+db.student_groups.createIndex(
+  { teacher_id: 1, status: 1, normalized_name: 1 },
+  { name: 'ix_student_groups_teacher_status_name' },
+);
+db.student_groups.createIndex(
+  { teacher_id: 1, normalized_name: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { status: 'active' },
+    name: 'ux_student_groups_teacher_active_name',
+  },
+);
+db.student_groups.createIndex(
+  { created_by: 1, updated_at: -1 },
+  { name: 'ix_student_groups_creator_updated' },
+);
+db.student_group_memberships.createIndex(
+  { group_id: 1, student_id: 1 },
+  { unique: true, name: 'ux_student_group_membership' },
+);
+db.student_group_memberships.createIndex(
+  { student_id: 1, group_id: 1 },
+  { name: 'ix_student_group_membership_student' },
+);
 
 db.categories.createIndex({ slug: 1 }, { unique: true, name: 'ux_categories_slug' });
 db.categories.createIndex({ parent_id: 1 }, { name: 'ix_categories_parent' });
@@ -326,6 +391,123 @@ ensureCollection('doman_study_plans', {
   },
 });
 
+ensureCollection('doman_plan_assignments', {
+  $jsonSchema: {
+    bsonType: 'object',
+    required: [
+      'group_ids',
+      'direct_student_ids',
+      'student_ids',
+      'students',
+      'plan_date',
+      'force',
+      'status',
+      'summary',
+      'results',
+      'created_by',
+      'created_at',
+      'updated_at',
+    ],
+    additionalProperties: true,
+    properties: {
+      group_ids: {
+        bsonType: 'array',
+        uniqueItems: true,
+        items: { bsonType: 'objectId' },
+      },
+      direct_student_ids: {
+        bsonType: 'array',
+        uniqueItems: true,
+        items: { bsonType: 'objectId' },
+      },
+      student_ids: {
+        bsonType: 'array',
+        minItems: 1,
+        maxItems: 50,
+        uniqueItems: true,
+        items: { bsonType: 'objectId' },
+      },
+      students: {
+        bsonType: 'array',
+        minItems: 1,
+        maxItems: 50,
+        items: {
+          bsonType: 'object',
+          required: ['student_id', 'sources'],
+          additionalProperties: false,
+          properties: {
+            student_id: { bsonType: 'objectId' },
+            sources: {
+              bsonType: 'array',
+              minItems: 1,
+              items: {
+                bsonType: 'object',
+                required: ['type'],
+                additionalProperties: false,
+                properties: {
+                  type: { enum: ['direct', 'group'] },
+                  group_id: { bsonType: 'objectId' },
+                },
+              },
+            },
+          },
+        },
+      },
+      category_id: { bsonType: 'objectId' },
+      plan_date: { bsonType: 'date' },
+      target_cards_count: { bsonType: 'int', minimum: 1, maximum: 50 },
+      target_sessions_count: { bsonType: 'int', minimum: 1, maximum: 10 },
+      display_ms: { bsonType: 'int', minimum: 200, maximum: 10000 },
+      force: { bsonType: 'bool' },
+      status: {
+        enum: ['processing', 'completed', 'partial', 'failed'],
+      },
+      summary: {
+        bsonType: 'object',
+        required: ['total', 'generated', 'existing', 'failed'],
+        additionalProperties: false,
+        properties: {
+          total: { bsonType: 'int', minimum: 0 },
+          generated: { bsonType: 'int', minimum: 0 },
+          existing: { bsonType: 'int', minimum: 0 },
+          failed: { bsonType: 'int', minimum: 0 },
+        },
+      },
+      results: {
+        bsonType: 'array',
+        maxItems: 50,
+        items: {
+          bsonType: 'object',
+          required: ['student_id', 'status', 'sources'],
+          additionalProperties: false,
+          properties: {
+            student_id: { bsonType: 'objectId' },
+            status: { enum: ['generated', 'existing', 'failed'] },
+            plan_id: { bsonType: 'objectId' },
+            error: { bsonType: 'string', maxLength: 500 },
+            sources: {
+              bsonType: 'array',
+              minItems: 1,
+              items: {
+                bsonType: 'object',
+                required: ['type'],
+                additionalProperties: false,
+                properties: {
+                  type: { enum: ['direct', 'group'] },
+                  group_id: { bsonType: 'objectId' },
+                },
+              },
+            },
+          },
+        },
+      },
+      created_by: { bsonType: 'objectId' },
+      created_at: { bsonType: 'date' },
+      updated_at: { bsonType: 'date' },
+    },
+  },
+});
+
 ensureCollection('doman_sessions', {
   $jsonSchema: {
     bsonType: 'object',
@@ -432,6 +614,19 @@ db.doman_study_plans.createIndex(
   { student_id: 1, status: 1, start_date: 1, end_date: 1 },
   { name: 'ix_study_plan_student_status_dates' },
 );
+
+db.doman_plan_assignments.createIndex(
+  { created_by: 1, created_at: -1 },
+  { name: 'ix_plan_assignments_creator_created' },
+);
+db.doman_plan_assignments.createIndex(
+  { student_ids: 1, plan_date: -1 },
+  { name: 'ix_plan_assignments_student_date' },
+);
+db.doman_plan_assignments.createIndex(
+  { status: 1, updated_at: -1 },
+  { name: 'ix_plan_assignments_status_updated' },
+);
 db.doman_study_plans.createIndex(
   { created_by: 1, updated_at: -1 },
   { name: 'ix_study_plan_creator_updated' },
@@ -476,6 +671,6 @@ db.doman_exposure_logs.createIndex(
 );
 
 print(
-  'lectura_aumentada_full_schema: 11 colecciones (5 núcleo + 6 doman) e índices aplicados.',
+  'lectura_aumentada_full_schema: 14 colecciones (7 núcleo + 7 doman) e índices aplicados.',
 );
 print(`reference_time=${now.toISOString()}`);

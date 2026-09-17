@@ -19,6 +19,10 @@ Cada documento contiene:
   fechas y una lista de categorías con los `word_card_ids` elegidos.
 - Auditoría mediante `created_by`, `created_at` y `updated_at`.
 
+`created_by` también define la propiedad operativa: un docente solo puede listar,
+consultar, editar, archivar o generar días desde sus propios planes de estudio. Un
+administrador puede gestionar planes de cualquier docente.
+
 Solo se permite un plan activo para un estudiante en un rango de fechas
 solapado. Esta regla se valida en la capa de aplicación; el índice
 `ix_study_plan_student_status_dates` soporta la consulta.

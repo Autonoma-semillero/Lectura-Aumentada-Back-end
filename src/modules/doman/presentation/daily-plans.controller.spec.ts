@@ -2,6 +2,7 @@ import { Test } from '@nestjs/testing';
 import type { Request } from 'express';
 import { ROLES_KEY } from '../../../common/decorators/roles.decorator';
 import { DailyPlansService } from '../application/daily-plans.service';
+import { PlanAssignmentsService } from '../application/plan-assignments.service';
 import { DailyPlansController } from './daily-plans.controller';
 
 describe('DailyPlansController', () => {
@@ -14,13 +15,19 @@ describe('DailyPlansController', () => {
     update: jest.fn(),
     delete: jest.fn(),
   };
+  const planAssignmentsService = {
+    generate: jest.fn(),
+  };
   let controller: DailyPlansController;
 
   beforeEach(async () => {
     jest.clearAllMocks();
     const moduleRef = await Test.createTestingModule({
       controllers: [DailyPlansController],
-      providers: [{ provide: DailyPlansService, useValue: dailyPlansService }],
+      providers: [
+        { provide: DailyPlansService, useValue: dailyPlansService },
+        { provide: PlanAssignmentsService, useValue: planAssignmentsService },
+      ],
     }).compile();
     controller = moduleRef.get(DailyPlansController);
   });
@@ -71,6 +78,13 @@ describe('DailyPlansController', () => {
     });
   });
 
+  it('restringe la generación masiva a docentes y administradores', () => {
+    expect(Reflect.getMetadata(ROLES_KEY, controller.bulkGenerate)).toEqual([
+      'teacher',
+      'admin',
+    ]);
+  });
+
   it('delega today con categoría opcional e identidad autenticada', async () => {
     const query = {
       student_id: '507f1f77bcf86cd799439011',
@@ -95,10 +109,14 @@ describe('DailyPlansController', () => {
 
     await controller.today(query, request);
 
-    expect(dailyPlansService.getToday).toHaveBeenCalledWith(query.student_id, query.category_id, {
-      userId: query.student_id,
-      role: 'student',
-    });
+    expect(dailyPlansService.getToday).toHaveBeenCalledWith(
+      query.student_id,
+      query.category_id,
+      {
+        userId: query.student_id,
+        role: 'student',
+      },
+    );
   });
 
   it('delega list y getOne con la identidad autenticada', async () => {
@@ -115,7 +133,10 @@ describe('DailyPlansController', () => {
     });
     expect(dailyPlansService.getById).toHaveBeenCalledWith(
       '507f1f77bcf86cd799439031',
-      { userId: studentId, role: 'student' },
+      {
+        userId: studentId,
+        role: 'student',
+      },
     );
   });
 

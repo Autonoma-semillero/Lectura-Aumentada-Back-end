@@ -111,15 +111,17 @@ describe('DailyPlansService', () => {
         studentRequester,
       ),
     ).rejects.toBeInstanceOf(ForbiddenException);
-    expect(dailyPlansRepository.findByStudentAndDateRange).not.toHaveBeenCalled();
+    expect(
+      dailyPlansRepository.findByStudentAndDateRange,
+    ).not.toHaveBeenCalled();
   });
 
   it('impide que un estudiante lea por id el plan de otro usuario', async () => {
     dailyPlansRepository.findById.mockResolvedValue(buildPlan(otherStudentId));
 
-    await expect(service.getById(planId, studentRequester)).rejects.toBeInstanceOf(
-      ForbiddenException,
-    );
+    await expect(
+      service.getById(planId, studentRequester),
+    ).rejects.toBeInstanceOf(ForbiddenException);
   });
 
   it('normaliza ObjectIds al validar que el estudiante accede a su plan', async () => {
@@ -163,7 +165,9 @@ describe('DailyPlansService', () => {
     await expect(
       service.generate({ student_id: otherStudentId }, studentRequester),
     ).rejects.toBeInstanceOf(ForbiddenException);
-    expect(dailyPlansRepository.findByStudentAndPlanDate).not.toHaveBeenCalled();
+    expect(
+      dailyPlansRepository.findByStudentAndPlanDate,
+    ).not.toHaveBeenCalled();
     expect(dailyPlansRepository.create).not.toHaveBeenCalled();
   });
 
@@ -277,6 +281,51 @@ describe('DailyPlansService', () => {
     ).rejects.toBeInstanceOf(ConflictException);
   });
 
+  it('limpia el plan nuevo, sus sesiones y tarjetas si falla la generación', async () => {
+    const plan = buildPlan(studentId);
+    const session = buildSession(studentId);
+    categoriesService.findById.mockResolvedValue({ id: categoryId });
+    wordCardsRepository.listByStudentCategoryAndStatuses.mockResolvedValue(
+      buildCards(studentId),
+    );
+    dailyPlansRepository.findByStudentAndPlanDate.mockResolvedValue(null);
+    dailyPlansRepository.create.mockResolvedValue(plan);
+    sessionsRepository.create.mockResolvedValue(session);
+    sessionCardsRepository.createMany.mockRejectedValue(
+      new Error('session cards insert failed'),
+    );
+    sessionsRepository.findByDailyPlanId.mockResolvedValue([session]);
+    sessionCardsRepository.deleteBySessionIds.mockResolvedValue(undefined);
+    sessionsRepository.deleteByDailyPlanId.mockResolvedValue(undefined);
+    dailyPlansRepository.delete.mockResolvedValue(true);
+
+    await expect(
+      service.generate(
+        {
+          student_id: studentId,
+          category_id: categoryId,
+          target_cards_count: 3,
+          target_sessions_count: 1,
+        },
+        studentRequester,
+      ),
+    ).rejects.toThrow('session cards insert failed');
+
+    expect(sessionCardsRepository.deleteBySessionIds).toHaveBeenCalledWith([
+      sessionId,
+    ]);
+    expect(sessionsRepository.deleteByDailyPlanId).toHaveBeenCalledWith(planId);
+    expect(dailyPlansRepository.delete).toHaveBeenCalledWith(planId);
+    expect(
+      sessionCardsRepository.deleteBySessionIds.mock.invocationCallOrder[0],
+    ).toBeLessThan(
+      sessionsRepository.deleteByDailyPlanId.mock.invocationCallOrder[0],
+    );
+    expect(
+      sessionsRepository.deleteByDailyPlanId.mock.invocationCallOrder[0],
+    ).toBeLessThan(dailyPlansRepository.delete.mock.invocationCallOrder[0]);
+  });
+
   it('impide cambiar la categoría de un plan que ya tiene sesiones', async () => {
     dailyPlansRepository.findById.mockResolvedValue(buildPlan(studentId));
     categoriesService.findById.mockResolvedValue({ id: otherCategoryId });
@@ -311,10 +360,7 @@ describe('DailyPlansService', () => {
     sessionCardsRepository.createMany.mockResolvedValue(undefined);
   }
 
-  function buildPlan(
-    targetStudentId: string,
-    selectedCategoryId = categoryId,
-  ) {
+  function buildPlan(targetStudentId: string, selectedCategoryId = categoryId) {
     return {
       id: planId,
       student_id: targetStudentId,

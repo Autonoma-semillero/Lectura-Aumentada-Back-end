@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Inject,
   Injectable,
   NotFoundException,
@@ -16,7 +17,10 @@ import type {
 } from '../domain/interfaces/doman-study-plan.interface';
 import type { IStudyPlansRepository } from '../domain/interfaces/study-plans.repository.interface';
 import type { DomanRequester } from '../domain/types/doman-requester.type';
-import { CreateStudyPlanDto, StudyPlanLevelDto } from '../dto/create-study-plan.dto';
+import {
+  CreateStudyPlanDto,
+  StudyPlanLevelDto,
+} from '../dto/create-study-plan.dto';
 import { GenerateStudyPlanDayDto } from '../dto/generate-study-plan-day.dto';
 import { ListStudyPlansQueryDto } from '../dto/list-study-plans-query.dto';
 import { UpdateStudyPlanDto } from '../dto/update-study-plan.dto';
@@ -24,6 +28,7 @@ import { GetActiveStudyPlanQueryDto } from '../dto/get-active-study-plan-query.d
 import {
   assertCanAccessStudent,
   assertCanManageDoman,
+  isSameObjectId,
 } from './doman-authorization.util';
 import { DailyPlansService } from './daily-plans.service';
 import {
@@ -50,6 +55,7 @@ export class StudyPlansService {
     return this.studyPlansRepository.findAll({
       studentId: query.student_id,
       status: query.status,
+      createdBy: requester.role === 'admin' ? undefined : requester.userId,
     });
   }
 
@@ -58,7 +64,7 @@ export class StudyPlansService {
     requester: DomanRequester,
   ): Promise<DomanStudyPlan> {
     assertCanManageDoman(requester);
-    return this.requirePlan(id);
+    return this.requireManagedPlan(id, requester);
   }
 
   async getActiveConfiguration(
@@ -158,7 +164,7 @@ export class StudyPlansService {
     requester: DomanRequester,
   ): Promise<DomanStudyPlan> {
     assertCanManageDoman(requester);
-    const existing = await this.requirePlan(id);
+    const existing = await this.requireManagedPlan(id, requester);
     if (dto.name !== undefined && !dto.name.trim()) {
       throw new BadRequestException('name must not be empty');
     }
@@ -170,7 +176,11 @@ export class StudyPlansService {
       ? planDateToUtcMidnight(dto.end_date)
       : existing.end_date;
     this.assertDateRange(startDate, endDate);
-    if (dto.student_id && dto.student_id !== existing.student_id && !dto.levels) {
+    if (
+      dto.student_id &&
+      dto.student_id !== existing.student_id &&
+      !dto.levels
+    ) {
       throw new BadRequestException(
         'levels are required when changing the study plan student',
       );
@@ -185,13 +195,7 @@ export class StudyPlansService {
       : existing.levels;
     this.assertLevelsInsidePlan(levels, startDate, endDate);
     const status = dto.status ?? existing.status;
-    await this.assertNoActiveOverlap(
-      studentId,
-      startDate,
-      endDate,
-      status,
-      id,
-    );
+    await this.assertNoActiveOverlap(studentId, startDate, endDate, status, id);
 
     const updated = await this.studyPlansRepository.update(id, {
       name: dto.name?.trim(),
@@ -214,7 +218,7 @@ export class StudyPlansService {
 
   async archive(id: string, requester: DomanRequester): Promise<void> {
     assertCanManageDoman(requester);
-    await this.requirePlan(id);
+    await this.requireManagedPlan(id, requester);
     await this.studyPlansRepository.update(id, { status: 'archived' });
   }
 
@@ -224,9 +228,11 @@ export class StudyPlansService {
     requester: DomanRequester,
   ): Promise<unknown[]> {
     assertCanManageDoman(requester);
-    const plan = await this.requirePlan(id);
+    const plan = await this.requireManagedPlan(id, requester);
     if (plan.status !== 'active') {
-      throw new ConflictException('Only active study plans can generate sessions');
+      throw new ConflictException(
+        'Only active study plans can generate sessions',
+      );
     }
     const date = dto.date
       ? planDateToUtcMidnight(dto.date)
@@ -236,7 +242,9 @@ export class StudyPlansService {
     }
     const level = this.findLevelForDate(plan, date);
     if (!level) {
-      throw new NotFoundException('No study plan level is scheduled for this date');
+      throw new NotFoundException(
+        'No study plan level is scheduled for this date',
+      );
     }
 
     const summaries: unknown[] = [];
@@ -265,6 +273,20 @@ export class StudyPlansService {
     return plan;
   }
 
+  private async requireManagedPlan(
+    id: string,
+    requester: DomanRequester,
+  ): Promise<DomanStudyPlan> {
+    const plan = await this.requirePlan(id);
+    if (
+      requester.role !== 'admin' &&
+      !isSameObjectId(plan.created_by, requester.userId)
+    ) {
+      throw new ForbiddenException('You cannot manage this study plan');
+    }
+    return plan;
+  }
+
   private async buildAndValidateLevels(
     levelDtos: StudyPlanLevelDto[],
     studentId: string,
@@ -285,7 +307,9 @@ export class StudyPlansService {
       }))
       .sort((left, right) => left.order_index - right.order_index);
 
-    if (new Set(levels.map((level) => level.order_index)).size !== levels.length) {
+    if (
+      new Set(levels.map((level) => level.order_index)).size !== levels.length
+    ) {
       throw new BadRequestException('Level order_index values must be unique');
     }
     if (new Set(levels.map((level) => level.id)).size !== levels.length) {
@@ -305,7 +329,9 @@ export class StudyPlansService {
         (category) => category.category_id,
       );
       if (new Set(categoryIds).size !== categoryIds.length) {
-        throw new BadRequestException('A category cannot repeat inside a level');
+        throw new BadRequestException(
+          'A category cannot repeat inside a level',
+        );
       }
       for (const category of level.categories) {
         await this.categoriesService.findById(category.category_id);
@@ -313,7 +339,9 @@ export class StudyPlansService {
           category.word_card_ids,
         );
         if (cards.length !== category.word_card_ids.length) {
-          throw new BadRequestException('One or more selected word cards do not exist');
+          throw new BadRequestException(
+            'One or more selected word cards do not exist',
+          );
         }
         if (
           cards.some(

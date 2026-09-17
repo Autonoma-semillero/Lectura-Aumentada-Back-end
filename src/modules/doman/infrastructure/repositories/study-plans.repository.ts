@@ -90,6 +90,9 @@ export class StudyPlansRepository implements IStudyPlansRepository {
 
   async findAll(filter: StudyPlanListFilter): Promise<DomanStudyPlan[]> {
     const query: Filter<Document> = {};
+    if (filter.createdBy) {
+      query.created_by = new Types.ObjectId(filter.createdBy);
+    }
     if (filter.studentId) {
       query.student_id = new Types.ObjectId(filter.studentId);
     }

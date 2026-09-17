@@ -1,4 +1,8 @@
-import { BadRequestException, ConflictException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { CategoriesService } from '../../categories/application/categories.service';
 import { WORD_CARDS_REPOSITORY } from '../../categories/domain/constants/categories.tokens';
@@ -82,23 +86,76 @@ describe('StudyPlansService', () => {
     );
   });
 
+  it('lista para el docente únicamente los planes creados por él', async () => {
+    studyPlansRepository.findAll.mockResolvedValue([]);
+
+    await service.list({}, requester);
+
+    expect(studyPlansRepository.findAll).toHaveBeenCalledWith({
+      studentId: undefined,
+      status: undefined,
+      createdBy: requester.userId,
+    });
+  });
+
+  it('permite al administrador listar planes de todos los docentes', async () => {
+    studyPlansRepository.findAll.mockResolvedValue([]);
+
+    await service.list({}, { userId: requester.userId, role: 'admin' });
+
+    expect(studyPlansRepository.findAll).toHaveBeenCalledWith(
+      expect.objectContaining({ createdBy: undefined }),
+    );
+  });
+
+  it('impide que un docente modifique un plan creado por otro', async () => {
+    studyPlansRepository.findById.mockResolvedValue({
+      ...buildPlan(),
+      created_by: '507f1f77bcf86cd799439099',
+    });
+
+    await expect(
+      service.update(planId, { name: 'Nombre ajeno' }, requester),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(studyPlansRepository.update).not.toHaveBeenCalled();
+  });
+
+  it('permite al administrador gestionar un plan de otro docente', async () => {
+    studyPlansRepository.findById.mockResolvedValue({
+      ...buildPlan(),
+      created_by: '507f1f77bcf86cd799439099',
+    });
+    studyPlansRepository.update.mockResolvedValue({
+      ...buildPlan(),
+      name: 'Nombre administrado',
+    });
+
+    await expect(
+      service.update(
+        planId,
+        { name: 'Nombre administrado' },
+        { userId: requester.userId, role: 'admin' },
+      ),
+    ).resolves.toMatchObject({ name: 'Nombre administrado' });
+  });
+
   it('rechaza tarjetas que no pertenecen al estudiante del plan', async () => {
     wordCardsRepository.findByIds.mockResolvedValue([
       buildCard(cardId, otherStudentId, categoryId),
     ]);
 
-    await expect(service.create(buildCreateDto(), requester)).rejects.toBeInstanceOf(
-      BadRequestException,
-    );
+    await expect(
+      service.create(buildCreateDto(), requester),
+    ).rejects.toBeInstanceOf(BadRequestException);
     expect(studyPlansRepository.create).not.toHaveBeenCalled();
   });
 
   it('impide dos planes activos solapados para el mismo estudiante', async () => {
     studyPlansRepository.findOverlappingActive.mockResolvedValue(buildPlan());
 
-    await expect(service.create(buildCreateDto(), requester)).rejects.toBeInstanceOf(
-      ConflictException,
-    );
+    await expect(
+      service.create(buildCreateDto(), requester),
+    ).rejects.toBeInstanceOf(ConflictException);
   });
 
   it('exige redefinir niveles al cambiar el estudiante', async () => {
@@ -230,7 +287,11 @@ describe('StudyPlansService', () => {
     };
   }
 
-  function buildCard(id: string, targetStudentId: string, targetCategoryId: string) {
+  function buildCard(
+    id: string,
+    targetStudentId: string,
+    targetCategoryId: string,
+  ) {
     return {
       id,
       student_id: targetStudentId,

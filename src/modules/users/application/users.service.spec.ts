@@ -10,6 +10,8 @@ describe('UsersService', () => {
     findById: jest.fn(),
     findByEmail: jest.fn(),
     findByUsername: jest.fn(),
+    findStudentsByIds: jest.fn(),
+    searchStudents: jest.fn(),
     create: jest.fn(),
     update: jest.fn(),
   };
@@ -43,7 +45,9 @@ describe('UsersService', () => {
     const list = await service.listPublicUsers();
     expect(list).toHaveLength(1);
     expect(list[0].email).toBe('u@x.com');
-    expect((list[0] as { password_hash?: string }).password_hash).toBeUndefined();
+    expect(
+      (list[0] as { password_hash?: string }).password_hash,
+    ).toBeUndefined();
   });
 
   it('crea estudiantes con username normalizado y contraseña Argon2', async () => {
@@ -75,9 +79,13 @@ describe('UsersService', () => {
     };
     expect(payload.email).toBe('ana@example.com');
     expect(payload.username).toBe('ana.garcia');
-    expect(await verifyPassword('Lectura123!', payload.password_hash)).toBe(true);
+    expect(await verifyPassword('Lectura123!', payload.password_hash)).toBe(
+      true,
+    );
     expect(created.username).toBe('ana.garcia');
-    expect((created as { password_hash?: string }).password_hash).toBeUndefined();
+    expect(
+      (created as { password_hash?: string }).password_hash,
+    ).toBeUndefined();
   });
 
   it('rechaza un username ya registrado', async () => {
@@ -93,5 +101,17 @@ describe('UsersService', () => {
       }),
     ).rejects.toBeInstanceOf(ConflictException);
     expect(usersRepository.create).not.toHaveBeenCalled();
+  });
+
+  it('propaga offset y limita a cien la paginación de estudiantes', async () => {
+    usersRepository.searchStudents.mockResolvedValue([]);
+
+    await service.searchStudents(' Ana ', 250, 100);
+
+    expect(usersRepository.searchStudents).toHaveBeenCalledWith(
+      'Ana',
+      100,
+      100,
+    );
   });
 });
