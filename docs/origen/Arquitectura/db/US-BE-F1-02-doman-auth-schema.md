@@ -3,7 +3,7 @@
 ## Resumen
 
 - **`doman_exposure_logs.event_type`**: contrato API y dominio incluyen `session_completed`, alineado con `db/mongo/lectura_aumentada_full_schema.mongosh.js`.
-- **`doman_daily_plans`**: unicidad de negocio **1 plan por `(student_id, plan_date)`**; `category_id` pasa a **requerido** en el validador canónico.
+- **`doman_daily_plans`**: unicidad de negocio **1 plan por `(student_id, plan_date, category_id)`**; permite varias temáticas el mismo día y mantiene `category_id` requerido en el validador canónico.
 - **`doman_sessions`**: `category_id` **requerido** en el validador canónico.
 - **`sessions` (producto)**: `client_metadata` almacena `access_token_jti` y `access_token_hash` (SHA-256 del JWT), no el token en claro.
 - **Eliminación**: `src/database/doman.schemas.ts` (duplicado y desalineado); la fuente de verdad es el script mongosh + repositorios en `src/modules/doman/`.
@@ -11,6 +11,7 @@
 ## Migración de datos existentes
 
 - Documentos `doman_daily_plans` o `doman_sessions` sin `category_id` quedarán fuera de cumplimiento estricto del validador; el código registra **warnings** al mapear. Completar `category_id` en Mongo antes de subir `validationLevel` si aplica.
+- El script canónico crea `ux_daily_plan_student_date_category` y elimina el índice legado `ux_daily_plan_student_date` cuando todavía existe. Producción ya usa exclusivamente el índice compuesto nuevo; no requiere una migración de datos adicional.
 
 ## Referencias
 

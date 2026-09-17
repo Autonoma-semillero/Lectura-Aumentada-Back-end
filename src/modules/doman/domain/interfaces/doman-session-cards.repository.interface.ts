@@ -15,5 +15,6 @@ export interface IDomanSessionCardsRepository {
   createMany(payloads: DomanSessionCardInsertPayload[]): Promise<void>;
   touchDisplayedAt(sessionId: string, wordCardId: string, when: Date): Promise<void>;
   touchAudioPlayedAt(sessionId: string, wordCardId: string, when: Date): Promise<void>;
+  resetBySessionIds(sessionIds: string[]): Promise<void>;
   deleteBySessionIds(sessionIds: string[]): Promise<void>;
 }

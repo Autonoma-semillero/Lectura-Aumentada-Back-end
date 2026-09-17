@@ -218,6 +218,9 @@ export class CategoriesRepository implements ICategoriesRepository {
     total += await db
       .collection('doman_sessions')
       .countDocuments({ category_id: oid });
+    total += await db
+      .collection('doman_study_plans')
+      .countDocuments({ 'levels.categories.category_id': oid });
     total += await db.collection('categories').countDocuments({ parent_id: oid });
     return total;
   }

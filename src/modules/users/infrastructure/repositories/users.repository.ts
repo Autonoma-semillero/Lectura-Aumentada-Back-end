@@ -3,7 +3,10 @@ import type { Document } from 'mongodb';
 import { Connection } from 'mongoose';
 import { Types } from 'mongoose';
 import { MONGO_CONNECTION } from '../../../../database/mongodb.providers';
-import { User } from '../../domain/interfaces/user.interface';
+import {
+  User,
+  UserRole,
+} from '../../domain/interfaces/user.interface';
 import { IUsersRepository } from '../../domain/interfaces/users.repository.interface';
 
 @Injectable()
@@ -29,8 +32,9 @@ export class UsersRepository implements IUsersRepository {
     return {
       id: id.toHexString(),
       email: doc.email as string,
+      username: doc.username as string | undefined,
       display_name: doc.display_name as string | undefined,
-      roles: (doc.roles as string[] | undefined) ?? [],
+      roles: (doc.roles as UserRole[] | undefined) ?? [],
       status: doc.status as User['status'],
       password_hash: doc.password_hash as string | undefined,
       metadata: doc.metadata as Record<string, unknown> | undefined,
@@ -58,10 +62,17 @@ export class UsersRepository implements IUsersRepository {
     return doc ? this.toUser(doc) : null;
   }
 
+  async findByUsername(username: string): Promise<User | null> {
+    const normalizedUsername = username.trim().toLowerCase();
+    const doc = await this.coll().findOne({ username: normalizedUsername });
+    return doc ? this.toUser(doc) : null;
+  }
+
   async create(payload: Partial<User>): Promise<User> {
     const now = new Date();
     const doc: Document = {
       email: payload.email?.trim().toLowerCase(),
+      username: payload.username?.trim().toLowerCase(),
       display_name: payload.display_name,
       roles: payload.roles ?? ['student'],
       status: payload.status ?? 'active',
@@ -97,6 +108,9 @@ export class UsersRepository implements IUsersRepository {
     }
     if (payload.display_name !== undefined) {
       patch.display_name = payload.display_name;
+    }
+    if (payload.username !== undefined) {
+      patch.username = payload.username.trim().toLowerCase();
     }
     if (payload.roles !== undefined) {
       patch.roles = payload.roles;

@@ -57,6 +57,27 @@ export class WordCardsRepository implements IWordCardsRepository {
     return doc ? this.toListed(doc) : null;
   }
 
+  async findByIds(ids: string[]): Promise<WordCardListed[]> {
+    const validIds = ids.filter((id) => Types.ObjectId.isValid(id));
+    if (validIds.length === 0) {
+      return [];
+    }
+    const docs = await this.coll()
+      .find({
+        _id: { $in: validIds.map((id) => new Types.ObjectId(id)) },
+      })
+      .toArray();
+    const byId = new Map(
+      docs.map((doc) => {
+        const listed = this.toListed(doc);
+        return [listed.id, listed] as const;
+      }),
+    );
+    return validIds
+      .map((id) => byId.get(id))
+      .filter((card): card is WordCardListed => card !== undefined);
+  }
+
   async listByCategoryId(categoryId: string): Promise<WordCardListed[]> {
     if (!Types.ObjectId.isValid(categoryId)) {
       return [];

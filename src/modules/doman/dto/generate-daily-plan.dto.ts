@@ -1,5 +1,13 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsBoolean, IsMongoId, IsNumber, IsOptional, Max, Min } from 'class-validator';
+import {
+  IsBoolean,
+  IsDateString,
+  IsMongoId,
+  IsNumber,
+  IsOptional,
+  Max,
+  Min,
+} from 'class-validator';
 
 export class GenerateDailyPlanDto {
   @ApiProperty({ description: 'ObjectId del estudiante' })
@@ -10,6 +18,16 @@ export class GenerateDailyPlanDto {
   @IsOptional()
   @IsMongoId()
   category_id?: string;
+
+  @ApiPropertyOptional({ description: 'Plan de estudio maestro que origina el día.' })
+  @IsOptional()
+  @IsMongoId()
+  study_plan_id?: string;
+
+  @ApiPropertyOptional({ type: String, format: 'date' })
+  @IsOptional()
+  @IsDateString()
+  plan_date?: string;
 
   @ApiPropertyOptional({ minimum: 3, maximum: 8 })
   @IsOptional()

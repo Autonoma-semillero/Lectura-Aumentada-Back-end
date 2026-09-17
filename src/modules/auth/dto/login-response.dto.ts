@@ -8,6 +8,9 @@ export class SessionUserResponseDto {
   email!: string;
 
   @ApiPropertyOptional()
+  username?: string;
+
+  @ApiPropertyOptional()
   display_name?: string;
 
   @ApiProperty({ type: [String] })

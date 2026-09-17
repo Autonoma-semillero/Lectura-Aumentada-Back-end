@@ -94,4 +94,14 @@ export class DomanExposureLogsRepository implements IDomanExposureLogsRepository
       .toArray();
     return docs.map((doc) => this.toEntity(doc));
   }
+
+  async deleteBySessionIds(sessionIds: string[]): Promise<void> {
+    const validIds = sessionIds.filter((id) => Types.ObjectId.isValid(id));
+    if (validIds.length === 0) {
+      return;
+    }
+    await this.coll().deleteMany({
+      session_id: { $in: validIds.map((id) => new Types.ObjectId(id)) },
+    });
+  }
 }

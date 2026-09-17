@@ -22,4 +22,5 @@ export interface IDomanExposureLogsRepository {
     eventType: DomanExposureEventType,
   ): Promise<number>;
   listByStudent(studentId: string): Promise<DomanExposureLog[]>;
+  deleteBySessionIds(sessionIds: string[]): Promise<void>;
 }

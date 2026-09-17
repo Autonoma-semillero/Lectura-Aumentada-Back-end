@@ -5,6 +5,8 @@ export interface DomanDailyPlan {
   target_cards_count: number;
   target_sessions_count: number;
   category_id: string;
+  study_plan_id?: string;
+  study_plan_level_id?: string;
   algorithm_version?: string;
   notes?: string;
   created_at: Date;

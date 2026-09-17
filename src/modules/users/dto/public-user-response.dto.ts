@@ -9,6 +9,9 @@ export class PublicUserResponseDto {
   email!: string;
 
   @ApiPropertyOptional()
+  username?: string;
+
+  @ApiPropertyOptional()
   display_name?: string;
 
   @ApiProperty({ type: [String] })

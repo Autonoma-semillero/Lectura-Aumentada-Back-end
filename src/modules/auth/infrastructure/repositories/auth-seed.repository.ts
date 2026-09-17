@@ -35,6 +35,7 @@ export class AuthSeedRepository implements IAuthSeedRepository {
     const now = new Date();
     await this.usersCollection().insertOne({
       email,
+      username: email.split('@')[0],
       display_name: input.displayName,
       roles: input.roles,
       status: 'active',

@@ -147,4 +147,15 @@ export class DomanSessionCardsRepository implements IDomanSessionCardsRepository
       session_id: { $in: validIds.map((id) => new Types.ObjectId(id)) },
     });
   }
+
+  async resetBySessionIds(sessionIds: string[]): Promise<void> {
+    const validIds = sessionIds.filter((id) => Types.ObjectId.isValid(id));
+    if (validIds.length === 0) {
+      return;
+    }
+    await this.coll().updateMany(
+      { session_id: { $in: validIds.map((id) => new Types.ObjectId(id)) } },
+      { $unset: { displayed_at: '', audio_played_at: '' } },
+    );
+  }
 }

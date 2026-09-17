@@ -45,6 +45,7 @@ ensureCollection('users', {
     additionalProperties: true,
     properties: {
       email: { bsonType: 'string', minLength: 3 },
+      username: { bsonType: 'string', minLength: 3, maxLength: 30 },
       display_name: { bsonType: 'string' },
       roles: { bsonType: 'array' },
       status: { enum: ['active', 'disabled', 'pending'] },
@@ -137,6 +138,10 @@ ensureCollection('progress_logs', {
 });
 
 db.users.createIndex({ email: 1 }, { unique: true, name: 'ux_users_email' });
+db.users.createIndex(
+  { username: 1 },
+  { unique: true, sparse: true, name: 'ux_users_username' },
+);
 db.users.createIndex({ status: 1 }, { name: 'ix_users_status' });
 
 db.categories.createIndex({ slug: 1 }, { unique: true, name: 'ux_categories_slug' });
@@ -228,8 +233,93 @@ ensureCollection('doman_daily_plans', {
       target_cards_count: { bsonType: 'int', minimum: 1, maximum: 50 },
       target_sessions_count: { bsonType: 'int', minimum: 1, maximum: 10 },
       category_id: { bsonType: 'objectId' },
+      study_plan_id: { bsonType: 'objectId' },
+      study_plan_level_id: { bsonType: 'objectId' },
       algorithm_version: { bsonType: 'string' },
       notes: { bsonType: 'string' },
+      created_at: { bsonType: 'date' },
+      updated_at: { bsonType: 'date' },
+    },
+  },
+});
+
+ensureCollection('doman_study_plans', {
+  $jsonSchema: {
+    bsonType: 'object',
+    required: [
+      'name',
+      'student_id',
+      'start_date',
+      'end_date',
+      'sessions_per_day',
+      'display_ms',
+      'audio_mode',
+      'mode',
+      'status',
+      'levels',
+      'created_by',
+      'created_at',
+      'updated_at',
+    ],
+    additionalProperties: true,
+    properties: {
+      name: { bsonType: 'string', minLength: 1, maxLength: 120 },
+      description: { bsonType: 'string', maxLength: 500 },
+      student_id: { bsonType: 'objectId' },
+      start_date: { bsonType: 'date' },
+      end_date: { bsonType: 'date' },
+      sessions_per_day: { bsonType: 'int', minimum: 1, maximum: 10 },
+      display_ms: { bsonType: 'int', minimum: 200, maximum: 10000 },
+      audio_mode: { enum: ['auto', 'manual', 'disabled'] },
+      mode: { enum: ['manual', 'auto'] },
+      status: {
+        enum: ['draft', 'active', 'paused', 'completed', 'archived'],
+      },
+      levels: {
+        bsonType: 'array',
+        minItems: 1,
+        maxItems: 20,
+        items: {
+          bsonType: 'object',
+          required: [
+            '_id',
+            'name',
+            'order_index',
+            'start_date',
+            'end_date',
+            'categories',
+          ],
+          additionalProperties: true,
+          properties: {
+            _id: { bsonType: 'objectId' },
+            name: { bsonType: 'string', minLength: 1, maxLength: 100 },
+            order_index: { bsonType: 'int', minimum: 1 },
+            start_date: { bsonType: 'date' },
+            end_date: { bsonType: 'date' },
+            categories: {
+              bsonType: 'array',
+              minItems: 1,
+              maxItems: 20,
+              items: {
+                bsonType: 'object',
+                required: ['category_id', 'word_card_ids'],
+                additionalProperties: false,
+                properties: {
+                  category_id: { bsonType: 'objectId' },
+                  word_card_ids: {
+                    bsonType: 'array',
+                    minItems: 1,
+                    maxItems: 50,
+                    uniqueItems: true,
+                    items: { bsonType: 'objectId' },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+      created_by: { bsonType: 'objectId' },
       created_at: { bsonType: 'date' },
       updated_at: { bsonType: 'date' },
     },
@@ -329,9 +419,30 @@ db.doman_word_cards.createIndex(
 );
 
 db.doman_daily_plans.createIndex(
-  { student_id: 1, plan_date: 1 },
-  { unique: true, name: 'ux_daily_plan_student_date' },
+  { student_id: 1, plan_date: 1, category_id: 1 },
+  { unique: true, name: 'ux_daily_plan_student_date_category' },
 );
+
+db.doman_daily_plans.createIndex(
+  { study_plan_id: 1, plan_date: 1 },
+  { name: 'ix_daily_plan_study_plan_date' },
+);
+
+db.doman_study_plans.createIndex(
+  { student_id: 1, status: 1, start_date: 1, end_date: 1 },
+  { name: 'ix_study_plan_student_status_dates' },
+);
+db.doman_study_plans.createIndex(
+  { created_by: 1, updated_at: -1 },
+  { name: 'ix_study_plan_creator_updated' },
+);
+
+if (
+  db.doman_daily_plans.getIndexes().some((index) => index.name === 'ux_daily_plan_student_date')
+) {
+  db.doman_daily_plans.dropIndex('ux_daily_plan_student_date');
+  print('dropped legacy index: ux_daily_plan_student_date');
+}
 
 db.doman_sessions.createIndex(
   { daily_plan_id: 1, session_index: 1 },
@@ -365,8 +476,6 @@ db.doman_exposure_logs.createIndex(
 );
 
 print(
-  'lectura_aumentada_full_schema: 10 colecciones (5 núcleo + 5 doman) e índices aplicados.',
+  'lectura_aumentada_full_schema: 11 colecciones (5 núcleo + 6 doman) e índices aplicados.',
 );
 print(`reference_time=${now.toISOString()}`);
-
-

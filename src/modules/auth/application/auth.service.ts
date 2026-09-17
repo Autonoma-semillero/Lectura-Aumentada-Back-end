@@ -21,7 +21,8 @@ export class AuthService {
   ) {}
 
   async login(dto: LoginDto): Promise<LoginResponseDto> {
-    const user = await this.authRepository.validateUser(dto.email, dto.password);
+    const identifier = dto.identifier ?? dto.email ?? '';
+    const user = await this.authRepository.validateUser(identifier, dto.password);
     if (!user) {
       throw new UnauthorizedException('Invalid credentials');
     }
@@ -52,6 +53,7 @@ export class AuthService {
     return {
       id: user.id,
       email: user.email,
+      username: user.username,
       display_name: user.display_name,
       roles: user.roles,
       status: user.status,
