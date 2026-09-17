@@ -171,4 +171,26 @@ export class DomanSessionsRepository implements IDomanSessionsRepository {
     }
     await this.coll().deleteMany({ daily_plan_id: new Types.ObjectId(dailyPlanId) });
   }
+
+  async restoreByIds(ids: string[]): Promise<void> {
+    const validIds = ids.filter((id) => Types.ObjectId.isValid(id));
+    if (validIds.length === 0) {
+      return;
+    }
+    await this.coll().updateMany(
+      { _id: { $in: validIds.map((id) => new Types.ObjectId(id)) } },
+      {
+        $set: { status: 'planned', updated_at: new Date() },
+        $unset: { started_at: '', completed_at: '' },
+      },
+    );
+  }
+
+  async deleteById(id: string): Promise<boolean> {
+    if (!Types.ObjectId.isValid(id)) {
+      return false;
+    }
+    const result = await this.coll().deleteOne({ _id: new Types.ObjectId(id) });
+    return result.deletedCount > 0;
+  }
 }

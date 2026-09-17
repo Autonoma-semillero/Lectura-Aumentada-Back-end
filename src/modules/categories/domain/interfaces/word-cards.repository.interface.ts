@@ -8,6 +8,7 @@ import { WordCardListed } from './word-card-listed.interface';
 
 export interface IWordCardsRepository {
   findById(id: string): Promise<WordCardListed | null>;
+  findByIds(ids: string[]): Promise<WordCardListed[]>;
   listByCategoryId(categoryId: string): Promise<WordCardListed[]>;
   listByStudentId(studentId: string): Promise<WordCardListed[]>;
   listByStudentAndCategory(

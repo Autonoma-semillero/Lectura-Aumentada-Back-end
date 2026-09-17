@@ -6,6 +6,8 @@ export interface DailyPlanInsertPayload {
   targetCardsCount: number;
   targetSessionsCount: number;
   categoryId: string;
+  studyPlanId?: string;
+  studyPlanLevelId?: string;
   algorithmVersion?: string;
   notes?: string;
 }
@@ -14,6 +16,8 @@ export interface DailyPlanPatchPayload {
   targetCardsCount?: number;
   targetSessionsCount?: number;
   categoryId?: string;
+  studyPlanId?: string;
+  studyPlanLevelId?: string;
   algorithmVersion?: string;
   notes?: string;
 }
@@ -23,6 +27,7 @@ export interface IDailyPlansRepository {
   findByStudentAndPlanDate(
     studentId: string,
     planDateUtcMidnight: Date,
+    categoryId: string,
   ): Promise<DomanDailyPlan | null>;
   findByStudentAndDateRange(
     studentId: string,

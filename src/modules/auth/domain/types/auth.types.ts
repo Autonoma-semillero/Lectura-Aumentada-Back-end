@@ -12,6 +12,7 @@ export type AuthTokens = {
 export type SessionUser = {
   id: string;
   email: string;
+  username?: string;
   display_name?: string;
   roles: string[];
   status?: 'active' | 'disabled' | 'pending';

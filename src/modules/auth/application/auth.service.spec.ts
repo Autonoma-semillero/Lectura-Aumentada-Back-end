@@ -50,6 +50,25 @@ describe('AuthService', () => {
     );
   });
 
+  it('login acepta un nombre de usuario como identificador', async () => {
+    authRepository.validateUser.mockResolvedValue({
+      id: '507f1f77bcf86cd799439011',
+      email: 'a@b.com',
+      username: 'ana',
+      roles: ['student'],
+    });
+    authRepository.issueTokens.mockResolvedValue({ accessToken: 'signed.jwt' });
+    authRepository.createSession.mockResolvedValue(undefined);
+
+    const result = await service.login({
+      identifier: 'ana',
+      password: 'secret',
+    });
+
+    expect(authRepository.validateUser).toHaveBeenCalledWith('ana', 'secret');
+    expect(result.user.username).toBe('ana');
+  });
+
   it('logout delega en revokeSessionByAccessJti', async () => {
     authRepository.revokeSessionByAccessJti.mockResolvedValue(undefined);
     await service.logout('jti-1');

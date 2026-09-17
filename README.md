@@ -279,7 +279,7 @@ Archivos relevantes (`src/modules/categories/`):
 
 ### 8.7 Doman — planes diarios y sesiones (`doman_daily_plans`, `doman_sessions`)
 
-Temática activa de la jornada / sesión: **`category_id`** → `categories._id`, mismo criterio que **`doman_word_cards.category_id`** (README §2.1). Evidencia: [`docs/origen/Arquitectura/db/US-BE-F1-04-doman-plan-session-category.md`](./docs/origen/Arquitectura/db/US-BE-F1-04-doman-plan-session-category.md).
+Temática activa del plan / sesión: **`category_id`** → `categories._id`, mismo criterio que **`doman_word_cards.category_id`** (README §2.1). Un estudiante puede tener un plan por temática el mismo día; la unicidad es `(student_id, plan_date, category_id)`. Evidencia: [`docs/origen/Arquitectura/db/US-BE-F1-02-doman-auth-schema.md`](./docs/origen/Arquitectura/db/US-BE-F1-02-doman-auth-schema.md).
 
 | Método | Ruta | Descripción |
 |--------|------|-------------|
@@ -439,4 +439,3 @@ Cuando se modifiquen campos:
 ---
 
 Este documento define el contexto del proyecto. Las **reglas ejecutables** para que humanos e IA no diverjan en arquitectura están en [`AGENTS.md`](./AGENTS.md) y en `.cursor/rules/lectura-aumentada-architecture.mdc`.
-

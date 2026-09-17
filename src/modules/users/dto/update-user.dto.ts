@@ -6,8 +6,11 @@ import {
   IsObject,
   IsOptional,
   IsString,
+  Matches,
+  MaxLength,
   MinLength,
 } from 'class-validator';
+import type { UserRole } from '../domain/interfaces/user.interface';
 
 export class UpdateUserDto {
   @ApiPropertyOptional()
@@ -23,14 +26,22 @@ export class UpdateUserDto {
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
+  @MinLength(3)
+  @MaxLength(30)
+  @Matches(/^[a-zA-Z0-9._-]+$/)
+  username?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
   @MinLength(8)
-  password_hash?: string;
+  password?: string;
 
   @ApiPropertyOptional({ type: [String] })
   @IsOptional()
   @IsArray()
-  @IsString({ each: true })
-  roles?: string[];
+  @IsIn(['student', 'teacher'], { each: true })
+  roles?: UserRole[];
 
   @ApiPropertyOptional({ enum: ['active', 'disabled', 'pending'] })
   @IsOptional()

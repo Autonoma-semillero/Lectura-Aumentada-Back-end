@@ -38,5 +38,7 @@ export interface IDomanSessionsRepository {
     id: string,
     patch: DomanSessionPatchPayload,
   ): Promise<DomanSession | null>;
+  restoreByIds(ids: string[]): Promise<void>;
+  deleteById(id: string): Promise<boolean>;
   deleteByDailyPlanId(dailyPlanId: string): Promise<void>;
 }

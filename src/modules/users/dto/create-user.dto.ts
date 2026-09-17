@@ -1,14 +1,19 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   IsArray,
+  ArrayMaxSize,
+  ArrayNotEmpty,
   IsEmail,
   IsIn,
   IsNotEmpty,
   IsObject,
   IsOptional,
   IsString,
+  Matches,
+  MaxLength,
   MinLength,
 } from 'class-validator';
+import type { UserRole } from '../domain/interfaces/user.interface';
 
 export class CreateUserDto {
   @ApiProperty({ example: 'usuario@ejemplo.com' })
@@ -16,16 +21,30 @@ export class CreateUserDto {
   @IsNotEmpty()
   email!: string;
 
+  @ApiProperty({
+    example: 'ana.garcia',
+    description: 'Nombre único para iniciar sesión, sin espacios.',
+  })
+  @IsString()
+  @IsNotEmpty()
+  @MinLength(3)
+  @MaxLength(30)
+  @Matches(/^[a-zA-Z0-9._-]+$/)
+  username!: string;
+
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
   display_name?: string;
 
-  @ApiProperty({ description: 'Hash de contraseña ya calculado (no texto plano)' })
+  @ApiProperty({
+    format: 'password',
+    description: 'Contraseña que el backend almacena como hash Argon2.',
+  })
   @IsString()
   @IsNotEmpty()
   @MinLength(8)
-  password_hash!: string;
+  password!: string;
 
   @ApiPropertyOptional({
     type: [String],
@@ -34,8 +53,10 @@ export class CreateUserDto {
   })
   @IsOptional()
   @IsArray()
-  @IsString({ each: true })
-  roles?: string[];
+  @ArrayNotEmpty()
+  @ArrayMaxSize(1)
+  @IsIn(['student', 'teacher'], { each: true })
+  roles?: UserRole[];
 
   @ApiPropertyOptional({ enum: ['active', 'disabled', 'pending'] })
   @IsOptional()

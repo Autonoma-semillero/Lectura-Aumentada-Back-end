@@ -1,4 +1,5 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { ConflictException, Inject, Injectable } from '@nestjs/common';
+import { hashPassword } from '../../auth/domain/password.util';
 import { USERS_REPOSITORY } from '../domain/constants/users.tokens';
 import { IUsersRepository } from '../domain/interfaces/users.repository.interface';
 import { User } from '../domain/interfaces/user.interface';
@@ -27,10 +28,15 @@ export class UsersService {
   }
 
   async createPublic(dto: CreateUserDto): Promise<PublicUserResponseDto> {
+    const email = dto.email.trim().toLowerCase();
+    const username = dto.username.trim().toLowerCase();
+    await this.ensureUniqueIdentifiers(email, username);
+
     const user = await this.usersRepository.create({
-      email: dto.email,
+      email,
+      username,
       display_name: dto.display_name,
-      password_hash: dto.password_hash,
+      password_hash: await hashPassword(dto.password),
       roles: dto.roles ?? ['student'],
       status: dto.status ?? 'active',
       metadata: dto.metadata,
@@ -42,8 +48,50 @@ export class UsersService {
     id: string,
     dto: UpdateUserDto,
   ): Promise<PublicUserResponseDto | null> {
-    const user = await this.usersRepository.update(id, dto);
+    const payload = await this.toUpdatePayload(id, dto);
+    const user = await this.usersRepository.update(id, payload);
     return user ? this.toPublicUserResponse(user) : null;
+  }
+
+  private async toUpdatePayload(
+    id: string,
+    dto: UpdateUserDto,
+  ): Promise<Partial<User>> {
+    const email = dto.email?.trim().toLowerCase();
+    const username = dto.username?.trim().toLowerCase();
+    await this.ensureUniqueIdentifiers(email, username, id);
+
+    return {
+      email,
+      username,
+      display_name: dto.display_name,
+      password_hash:
+        dto.password === undefined
+          ? undefined
+          : await hashPassword(dto.password),
+      roles: dto.roles,
+      status: dto.status,
+      metadata: dto.metadata,
+    };
+  }
+
+  private async ensureUniqueIdentifiers(
+    email?: string,
+    username?: string,
+    currentUserId?: string,
+  ): Promise<void> {
+    const [emailOwner, usernameOwner] = await Promise.all([
+      email ? this.usersRepository.findByEmail(email) : Promise.resolve(null),
+      username
+        ? this.usersRepository.findByUsername(username)
+        : Promise.resolve(null),
+    ]);
+    if (emailOwner && emailOwner.id !== currentUserId) {
+      throw new ConflictException('Email is already registered');
+    }
+    if (usernameOwner && usernameOwner.id !== currentUserId) {
+      throw new ConflictException('Username is already registered');
+    }
   }
 
   private toPublicUserResponse(user: User): PublicUserResponseDto {
@@ -52,6 +100,7 @@ export class UsersService {
     return {
       id: rest.id,
       email: rest.email,
+      username: rest.username,
       display_name: rest.display_name,
       roles: rest.roles,
       status: rest.status,

@@ -15,16 +15,33 @@ import {
   DAILY_PLANS_REPOSITORY,
   DOMAN_SESSION_CARDS_REPOSITORY,
   DOMAN_SESSIONS_REPOSITORY,
+  STUDY_PLANS_REPOSITORY,
 } from '../domain/constants/doman.tokens';
 import { IDailyPlansRepository } from '../domain/interfaces/daily-plans.repository.interface';
 import { DomanDailyPlan } from '../domain/interfaces/doman-daily-plan.interface';
+import type {
+  DomanStudyPlan,
+  DomanStudyPlanCategory,
+  DomanStudyPlanLevel,
+} from '../domain/interfaces/doman-study-plan.interface';
 import { IDomanSessionCardsRepository } from '../domain/interfaces/doman-session-cards.repository.interface';
 import { IDomanSessionsRepository } from '../domain/interfaces/doman-sessions.repository.interface';
+import type { IStudyPlansRepository } from '../domain/interfaces/study-plans.repository.interface';
+import { DomanRequester } from '../domain/types/doman-requester.type';
 import { CreateDailyPlanDto } from '../dto/create-daily-plan.dto';
 import { GenerateDailyPlanDto } from '../dto/generate-daily-plan.dto';
 import { ListDailyPlansQueryDto } from '../dto/list-daily-plans-query.dto';
 import { UpdateDailyPlanDto } from '../dto/update-daily-plan.dto';
-import { planDateToUtcMidnight } from './plan-date.util';
+import { selectDefaultCategoryId } from './default-category.util';
+import {
+  assertCanAccessStudent,
+  assertCanManageDoman,
+  isSameObjectId,
+} from './doman-authorization.util';
+import {
+  planDateToUtcMidnight,
+  todayPlanDateUtcMidnight,
+} from './plan-date.util';
 
 @Injectable()
 export class DailyPlansService {
@@ -37,16 +54,22 @@ export class DailyPlansService {
     private readonly sessionCardsRepository: IDomanSessionCardsRepository,
     @Inject(WORD_CARDS_REPOSITORY)
     private readonly wordCardsRepository: IWordCardsRepository,
+    @Inject(STUDY_PLANS_REPOSITORY)
+    private readonly studyPlansRepository: IStudyPlansRepository,
     private readonly categoriesService: CategoriesService,
   ) {}
 
-  async list(query: ListDailyPlansQueryDto): Promise<DomanDailyPlan[]> {
+  async list(
+    query: ListDailyPlansQueryDto,
+    requester: DomanRequester,
+  ): Promise<DomanDailyPlan[]> {
     if (!isMongoObjectId(query.student_id)) {
       throw new BadRequestException('Invalid student_id');
     }
+    assertCanAccessStudent(requester, query.student_id);
     const to = query.to
       ? planDateToUtcMidnight(query.to)
-      : planDateToUtcMidnight(new Date().toISOString().slice(0, 10));
+      : todayPlanDateUtcMidnight();
     const from = query.from
       ? planDateToUtcMidnight(query.from)
       : new Date(to.getTime() - 60 * 24 * 60 * 60 * 1000);
@@ -60,7 +83,13 @@ export class DailyPlansService {
     );
   }
 
-  async getById(id: string): Promise<DomanDailyPlan> {
+  async getById(id: string, requester: DomanRequester): Promise<DomanDailyPlan> {
+    const plan = await this.requirePlan(id);
+    assertCanAccessStudent(requester, plan.student_id);
+    return plan;
+  }
+
+  private async requirePlan(id: string): Promise<DomanDailyPlan> {
     if (!isMongoObjectId(id)) {
       throw new BadRequestException('Invalid daily plan id');
     }
@@ -71,71 +100,149 @@ export class DailyPlansService {
     return plan;
   }
 
-  async getToday(studentId: string): Promise<unknown> {
+  async getToday(
+    studentId: string,
+    categoryId: string | undefined,
+    requester: DomanRequester,
+  ): Promise<unknown> {
     if (!isMongoObjectId(studentId)) {
       throw new BadRequestException('Invalid student_id');
     }
-    const today = planDateToUtcMidnight(new Date().toISOString().slice(0, 10));
+    assertCanAccessStudent(requester, studentId);
+    if (categoryId !== undefined && !isMongoObjectId(categoryId)) {
+      throw new BadRequestException('Invalid category_id');
+    }
+    const today = todayPlanDateUtcMidnight();
+    const studyContext = await this.resolveStudyPlanContext(
+      studentId,
+      today,
+      undefined,
+      categoryId,
+    );
+    const resolvedCategoryId =
+      categoryId ??
+      studyContext?.category.category_id ??
+      (await this.resolveDefaultCategoryId(studentId));
+    if (!resolvedCategoryId) {
+      throw new BadRequestException('No available category to generate a daily plan');
+    }
     const existing = await this.dailyPlansRepository.findByStudentAndPlanDate(
       studentId,
       today,
+      resolvedCategoryId,
     );
     if (existing) {
       const sessions = await this.sessionsRepository.findByDailyPlanId(existing.id);
-      const cards = await this.resolveCards(
-        existing.student_id,
-        existing.category_id,
-        existing.target_cards_count,
-      );
+      const cards = studyContext
+        ? await this.resolveConfiguredCards(
+            studyContext.category,
+            existing.student_id,
+          )
+        : await this.resolveCards(
+            existing.student_id,
+            existing.category_id,
+            existing.target_cards_count,
+          );
       return this.toSummary(existing, sessions, cards);
     }
-    return this.generate({ student_id: studentId });
+    return this.generatePlan({
+      student_id: studentId,
+      category_id: resolvedCategoryId,
+    });
   }
 
-  async generate(dto: GenerateDailyPlanDto): Promise<unknown> {
+  async generate(
+    dto: GenerateDailyPlanDto,
+    requester: DomanRequester,
+  ): Promise<unknown> {
     if (!isMongoObjectId(dto.student_id)) {
       throw new BadRequestException('Invalid student_id');
     }
-    const today = planDateToUtcMidnight(new Date().toISOString().slice(0, 10));
-    const targetCardsCount = this.clamp(dto.target_cards_count ?? 5, 3, 8);
-    const targetSessionsCount = this.clamp(dto.target_sessions_count ?? 3, 1, 5);
-    const displayMs = this.clamp(dto.display_ms ?? 2200, 800, 6000);
+    assertCanAccessStudent(requester, dto.student_id);
+    return this.generatePlan(dto);
+  }
+
+  private async generatePlan(dto: GenerateDailyPlanDto): Promise<unknown> {
+    try {
+      return await this.generatePlanOnce(dto);
+    } catch (error) {
+      this.rethrowDuplicateGeneration(error);
+      throw error;
+    }
+  }
+
+  private async generatePlanOnce(dto: GenerateDailyPlanDto): Promise<unknown> {
+    if (!isMongoObjectId(dto.student_id)) {
+      throw new BadRequestException('Invalid student_id');
+    }
+    const planDate = dto.plan_date
+      ? planDateToUtcMidnight(dto.plan_date)
+      : todayPlanDateUtcMidnight();
+    const studyContext = await this.resolveStudyPlanContext(
+      dto.student_id,
+      planDate,
+      dto.study_plan_id,
+      dto.category_id,
+    );
+    let targetCardsCount = this.clamp(dto.target_cards_count ?? 5, 1, 50);
+    const targetSessionsCount = this.clamp(
+      dto.target_sessions_count ?? studyContext?.plan.sessions_per_day ?? 5,
+      1,
+      10,
+    );
+    const displayMs = this.clamp(
+      dto.display_ms ?? studyContext?.plan.display_ms ?? 2200,
+      200,
+      10000,
+    );
     const force = dto.force ?? false;
 
-    const categoryId = dto.category_id ?? (await this.resolveDefaultCategoryId(dto.student_id));
+    const categoryId =
+      dto.category_id ??
+      studyContext?.category.category_id ??
+      (await this.resolveDefaultCategoryId(dto.student_id));
     if (!categoryId) {
       throw new BadRequestException('No available category to generate a daily plan');
     }
     await this.categoriesService.findById(categoryId);
 
-    const selectedCards = await this.resolveCards(
-      dto.student_id,
-      categoryId,
-      targetCardsCount,
-    );
+    const selectedCards = studyContext
+      ? await this.resolveConfiguredCards(
+          studyContext.category,
+          dto.student_id,
+        )
+      : await this.resolveCards(dto.student_id, categoryId, targetCardsCount);
     if (selectedCards.length === 0) {
       throw new BadRequestException('No available word cards to generate the daily plan');
     }
+    targetCardsCount = selectedCards.length;
 
     const existing = await this.dailyPlansRepository.findByStudentAndPlanDate(
       dto.student_id,
-      today,
+      planDate,
+      categoryId,
     );
 
     let plan: DomanDailyPlan;
     if (!existing) {
       plan = await this.dailyPlansRepository.create({
         studentId: dto.student_id,
-        planDateUtcMidnight: today,
+        planDateUtcMidnight: planDate,
         targetCardsCount: selectedCards.length,
         targetSessionsCount,
         categoryId,
-        algorithmVersion: 'doman-mvp-v1',
-        notes: 'Auto-generated daily plan',
+        studyPlanId: studyContext?.plan.id,
+        studyPlanLevelId: studyContext?.level.id,
+        algorithmVersion: studyContext
+          ? 'doman-study-plan-v1'
+          : 'doman-mvp-v1',
+        notes: studyContext
+          ? `Generated from study plan: ${studyContext.plan.name}`
+          : 'Auto-generated daily plan',
       });
     } else {
       const existingSessions = await this.sessionsRepository.findByDailyPlanId(existing.id);
-      if (!force && existingSessions.length > 0) {
+      if (!force) {
         return this.toSummary(existing, existingSessions, selectedCards);
       }
       if (force && existingSessions.some((session) => session.status === 'completed')) {
@@ -151,7 +258,11 @@ export class DailyPlansService {
         targetCardsCount: selectedCards.length,
         targetSessionsCount,
         categoryId,
-        algorithmVersion: 'doman-mvp-v1',
+        studyPlanId: studyContext?.plan.id,
+        studyPlanLevelId: studyContext?.level.id,
+        algorithmVersion: studyContext
+          ? 'doman-study-plan-v1'
+          : 'doman-mvp-v1',
         notes: force ? 'Regenerated daily plan' : 'Generated daily plan',
       });
       if (!updated) {
@@ -165,18 +276,15 @@ export class DailyPlansService {
       selectedCards,
       targetSessionsCount,
       displayMs,
+      studyContext?.plan.audio_mode ?? 'manual',
+      studyContext?.plan.mode ?? 'auto',
     );
     return this.toSummary(plan, sessions, selectedCards);
   }
 
-  async delete(id: string): Promise<void> {
-    if (!isMongoObjectId(id)) {
-      throw new BadRequestException('Invalid daily plan id');
-    }
-    const plan = await this.dailyPlansRepository.findById(id);
-    if (!plan) {
-      throw new NotFoundException('Daily plan not found');
-    }
+  async delete(id: string, requester: DomanRequester): Promise<void> {
+    assertCanManageDoman(requester);
+    await this.requirePlan(id);
     const sessions = await this.sessionsRepository.findByDailyPlanId(id);
     if (sessions.length > 0) {
       await this.sessionCardsRepository.deleteBySessionIds(sessions.map((s) => s.id));
@@ -185,7 +293,11 @@ export class DailyPlansService {
     await this.dailyPlansRepository.delete(id);
   }
 
-  async create(dto: CreateDailyPlanDto): Promise<DomanDailyPlan> {
+  async create(
+    dto: CreateDailyPlanDto,
+    requester: DomanRequester,
+  ): Promise<DomanDailyPlan> {
+    assertCanManageDoman(requester);
     await this.categoriesService.findById(dto.category_id);
     const planDateUtcMidnight = planDateToUtcMidnight(dto.plan_date);
     try {
@@ -204,8 +316,13 @@ export class DailyPlansService {
     }
   }
 
-  async update(id: string, dto: UpdateDailyPlanDto): Promise<DomanDailyPlan> {
-    await this.getById(id);
+  async update(
+    id: string,
+    dto: UpdateDailyPlanDto,
+    requester: DomanRequester,
+  ): Promise<DomanDailyPlan> {
+    assertCanManageDoman(requester);
+    const existing = await this.requirePlan(id);
     const touched =
       dto.target_cards_count !== undefined ||
       dto.target_sessions_count !== undefined ||
@@ -217,6 +334,14 @@ export class DailyPlansService {
     }
     if (dto.category_id !== undefined) {
       await this.categoriesService.findById(dto.category_id);
+      if (!isSameObjectId(dto.category_id, existing.category_id)) {
+        const sessions = await this.sessionsRepository.findByDailyPlanId(id);
+        if (sessions.length > 0) {
+          throw new ConflictException(
+            'Cannot change the category of a daily plan that already has sessions',
+          );
+        }
+      }
     }
     try {
       const updated = await this.dailyPlansRepository.update(id, {
@@ -244,6 +369,8 @@ export class DailyPlansService {
     cards: WordCardListed[],
     targetSessionsCount: number,
     displayMs: number,
+    audioMode: 'auto' | 'manual' | 'disabled' = 'manual',
+    mode: 'manual' | 'auto' = 'auto',
   ) {
     const sessions: Array<{
       id: string;
@@ -258,9 +385,9 @@ export class DailyPlansService {
         sessionIndex,
         categoryId: plan.category_id,
         displayMs,
-        audioMode: 'manual',
+        audioMode,
         status: 'planned',
-        mode: 'auto',
+        mode,
       });
       sessions.push({
         id: session.id,
@@ -281,7 +408,7 @@ export class DailyPlansService {
 
   private async resolveDefaultCategoryId(studentId: string): Promise<string | null> {
     const counts = await this.wordCardsRepository.countWordCardsByCategoryForStudent(studentId);
-    return counts[0]?.categoryId ?? null;
+    return selectDefaultCategoryId(counts);
   }
 
   private async resolveCards(
@@ -306,6 +433,75 @@ export class DailyPlansService {
     return sortCardsByPriority(candidateCards).slice(0, limit);
   }
 
+  private async resolveConfiguredCards(
+    category: DomanStudyPlanCategory,
+    studentId: string,
+  ): Promise<WordCardListed[]> {
+    const cards = await this.wordCardsRepository.findByIds(
+      category.word_card_ids,
+    );
+    return cards.filter(
+      (card) =>
+        card.student_id === studentId &&
+        card.category_id === category.category_id &&
+        card.status !== 'archived',
+    );
+  }
+
+  private async resolveStudyPlanContext(
+    studentId: string,
+    planDate: Date,
+    studyPlanId?: string,
+    categoryId?: string,
+  ): Promise<{
+    plan: DomanStudyPlan;
+    level: DomanStudyPlanLevel;
+    category: DomanStudyPlanCategory;
+  } | null> {
+    const plan = studyPlanId
+      ? await this.studyPlansRepository.findById(studyPlanId)
+      : await this.studyPlansRepository.findActiveForStudentAndDate(
+          studentId,
+          planDate,
+        );
+    if (!plan) {
+      if (studyPlanId) {
+        throw new NotFoundException('Study plan not found');
+      }
+      return null;
+    }
+    if (
+      plan.student_id !== studentId ||
+      plan.status !== 'active' ||
+      planDate < plan.start_date ||
+      planDate > plan.end_date
+    ) {
+      throw new ConflictException(
+        'Study plan is not active for this student and date',
+      );
+    }
+    const level = plan.levels.find(
+      (candidate) =>
+        candidate.start_date <= planDate && candidate.end_date >= planDate,
+    );
+    if (!level) {
+      throw new NotFoundException(
+        'No study plan level is scheduled for this date',
+      );
+    }
+    const category = categoryId
+      ? level.categories.find(
+          (candidate) => candidate.category_id === categoryId,
+        )
+      : level.categories[0];
+    if (!category) {
+      throw new NotFoundException(
+        'The category is not configured for the active study plan level',
+      );
+    }
+    return { plan, level, category };
+  }
+
   private clamp(value: number, min: number, max: number): number {
     return Math.max(min, Math.min(max, Math.round(value)));
   }
@@ -324,7 +520,7 @@ export class DailyPlansService {
         status: card.status,
         audio_url: card.audio_url,
       })),
-      sessions_count: sessions.length || plan.target_sessions_count,
+      sessions_count: sessions.length,
       completed_sessions_count: sessions.filter((session) => session.status === 'completed').length,
       pending_sessions_count: sessions.filter(
         (session) => session.status === 'planned' || session.status === 'in_progress',
@@ -337,14 +533,24 @@ export class DailyPlansService {
   }
 
   private rethrowDuplicateStudentPlanDate(error: unknown): void {
-    if (
-      error instanceof MongoServerError &&
-      (error.code === 11000 || error.code === 11001)
-    ) {
+    if (this.isDuplicateKeyError(error)) {
       throw new ConflictException(
-        'A daily plan already exists for this student and plan_date',
+        'A daily plan already exists for this student, plan_date and category_id',
       );
     }
+  }
+
+  private rethrowDuplicateGeneration(error: unknown): void {
+    if (this.isDuplicateKeyError(error)) {
+      throw new ConflictException('The daily plan or its sessions were generated concurrently');
+    }
+  }
+
+  private isDuplicateKeyError(error: unknown): boolean {
+    return (
+      error instanceof MongoServerError &&
+      (error.code === 11000 || error.code === 11001)
+    );
   }
 }
 

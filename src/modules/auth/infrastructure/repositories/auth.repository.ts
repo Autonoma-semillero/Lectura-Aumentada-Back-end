@@ -44,23 +44,29 @@ export class AuthRepository implements IAuthRepository {
     return {
       id: id.toHexString(),
       email: doc.email as string,
+      username: doc.username as string | undefined,
       display_name: doc.display_name as string | undefined,
       roles: (doc.roles as string[] | undefined) ?? ['student'],
       status: doc.status as SessionUser['status'],
     };
   }
 
-  async validateUser(email: string, password: string): Promise<SessionUser | null> {
-    if (typeof email !== 'string' || typeof password !== 'string') {
+  async validateUser(identifier: string, password: string): Promise<SessionUser | null> {
+    if (typeof identifier !== 'string' || typeof password !== 'string') {
       return null;
     }
 
-    const normalizedEmail = email.trim().toLowerCase();
-    if (!normalizedEmail || password.length === 0) {
+    const normalizedIdentifier = identifier.trim().toLowerCase();
+    if (!normalizedIdentifier || password.length === 0) {
       return null;
     }
 
-    const userDoc = await this.usersCollection().findOne({ email: normalizedEmail });
+    const userDoc = await this.usersCollection().findOne({
+      $or: [
+        { email: normalizedIdentifier },
+        { username: normalizedIdentifier },
+      ],
+    });
     if (!userDoc) {
       return null;
     }

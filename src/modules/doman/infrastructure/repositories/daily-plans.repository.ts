@@ -46,6 +46,12 @@ export class DailyPlansRepository implements IDailyPlansRepository {
       target_cards_count: doc.target_cards_count as number,
       target_sessions_count: doc.target_sessions_count as number,
       category_id: cat.toHexString(),
+      study_plan_id: (
+        doc.study_plan_id as Types.ObjectId | undefined
+      )?.toHexString(),
+      study_plan_level_id: (
+        doc.study_plan_level_id as Types.ObjectId | undefined
+      )?.toHexString(),
       algorithm_version: doc.algorithm_version as string | undefined,
       notes: doc.notes as string | undefined,
       created_at: doc.created_at as Date,
@@ -64,14 +70,17 @@ export class DailyPlansRepository implements IDailyPlansRepository {
   async findByStudentAndPlanDate(
     studentId: string,
     planDateUtcMidnight: Date,
+    categoryId: string,
   ): Promise<DomanDailyPlan | null> {
-    if (!Types.ObjectId.isValid(studentId)) {
+    if (!Types.ObjectId.isValid(studentId) || !Types.ObjectId.isValid(categoryId)) {
       return null;
     }
-    const doc = await this.coll().findOne({
+    const filter: Document = {
       student_id: new Types.ObjectId(studentId),
       plan_date: planDateUtcMidnight,
-    });
+      category_id: new Types.ObjectId(categoryId),
+    };
+    const doc = await this.coll().findOne(filter);
     return doc ? this.toEntity(doc) : null;
   }
 
@@ -106,6 +115,12 @@ export class DailyPlansRepository implements IDailyPlansRepository {
       created_at: now,
       updated_at: now,
     };
+    if (payload.studyPlanId !== undefined) {
+      doc.study_plan_id = new Types.ObjectId(payload.studyPlanId);
+    }
+    if (payload.studyPlanLevelId !== undefined) {
+      doc.study_plan_level_id = new Types.ObjectId(payload.studyPlanLevelId);
+    }
     if (payload.algorithmVersion !== undefined) {
       doc.algorithm_version = payload.algorithmVersion;
     }
@@ -150,6 +165,12 @@ export class DailyPlansRepository implements IDailyPlansRepository {
     }
     if (patch.categoryId !== undefined) {
       $set.category_id = new Types.ObjectId(patch.categoryId);
+    }
+    if (patch.studyPlanId !== undefined) {
+      $set.study_plan_id = new Types.ObjectId(patch.studyPlanId);
+    }
+    if (patch.studyPlanLevelId !== undefined) {
+      $set.study_plan_level_id = new Types.ObjectId(patch.studyPlanLevelId);
     }
     if (patch.algorithmVersion !== undefined) {
       $set.algorithm_version = patch.algorithmVersion;
