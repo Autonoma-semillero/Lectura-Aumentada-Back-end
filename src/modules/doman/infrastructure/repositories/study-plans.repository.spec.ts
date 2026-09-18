@@ -86,15 +86,20 @@ describe('StudyPlansRepository', () => {
     const objectIds = [studentId, otherStudentId].map(
       (id) => new Types.ObjectId(id),
     );
-    expect(findOne).toHaveBeenCalledWith({
-      $or: [
-        { student_ids: { $in: objectIds } },
-        { student_id: { $in: objectIds } },
-      ],
-      status: 'active',
-      start_date: { $lte: endDate },
-      end_date: { $gte: startDate },
-    });
+    expect(findOne).toHaveBeenCalledWith(
+      {
+        $or: [
+          { student_ids: { $in: objectIds } },
+          { student_id: { $in: objectIds } },
+        ],
+        status: 'active',
+        start_date: { $lte: endDate },
+        end_date: { $gte: startDate },
+      },
+      // El orden por `_id` es parte del contrato: devuelve el plan más antiguo
+      // de los que solapan, que es lo que desempata una carrera de creación.
+      { sort: { _id: 1 } },
+    );
   });
 
   it('persiste nuevos planes como schema v2 sin student_id singleton', async () => {

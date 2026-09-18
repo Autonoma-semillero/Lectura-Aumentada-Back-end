@@ -22,6 +22,17 @@ import type {
   DomanSessionAudioMode,
   DomanSessionMode,
 } from '../domain/interfaces/doman-session.interface';
+import {
+  DEFAULT_DAILY_PLAN_TARGET_CARDS,
+  DEFAULT_DAILY_PLAN_TARGET_SESSIONS,
+  DEFAULT_DOMAN_DISPLAY_MS,
+  MAX_DAILY_PLAN_TARGET_CARDS,
+  MAX_DAILY_PLAN_TARGET_SESSIONS,
+  MAX_DOMAN_DISPLAY_MS,
+  MIN_DAILY_PLAN_TARGET_CARDS,
+  MIN_DAILY_PLAN_TARGET_SESSIONS,
+  MIN_DOMAN_DISPLAY_MS,
+} from '../domain/constants/doman-limits.constants';
 
 const STUDY_PLAN_STATUSES: DomanStudyPlanStatus[] = [
   'draft',
@@ -39,16 +50,16 @@ export class StudyPlanCategoryDto {
   category_id!: string;
 
   @ApiPropertyOptional({
-    minimum: 1,
-    maximum: 50,
-    default: 5,
+    minimum: MIN_DAILY_PLAN_TARGET_CARDS,
+    maximum: MAX_DAILY_PLAN_TARGET_CARDS,
+    default: DEFAULT_DAILY_PLAN_TARGET_CARDS,
     description:
       'Cantidad de tarjetas elegibles que se resolverán por estudiante. Es la regla usada por planes v2.',
   })
   @IsOptional()
   @IsInt()
-  @Min(1)
-  @Max(50)
+  @Min(MIN_DAILY_PLAN_TARGET_CARDS)
+  @Max(MAX_DAILY_PLAN_TARGET_CARDS)
   target_cards_count?: number;
 
   @ApiPropertyOptional({
@@ -156,18 +167,26 @@ export class CreateStudyPlanDto {
   @IsDateString()
   end_date!: string;
 
-  @ApiPropertyOptional({ default: 5, minimum: 1, maximum: 10 })
+  @ApiPropertyOptional({
+    default: DEFAULT_DAILY_PLAN_TARGET_SESSIONS,
+    minimum: MIN_DAILY_PLAN_TARGET_SESSIONS,
+    maximum: MAX_DAILY_PLAN_TARGET_SESSIONS,
+  })
   @IsOptional()
   @IsInt()
-  @Min(1)
-  @Max(10)
+  @Min(MIN_DAILY_PLAN_TARGET_SESSIONS)
+  @Max(MAX_DAILY_PLAN_TARGET_SESSIONS)
   sessions_per_day?: number;
 
-  @ApiPropertyOptional({ default: 2200, minimum: 200, maximum: 10000 })
+  @ApiPropertyOptional({
+    default: DEFAULT_DOMAN_DISPLAY_MS,
+    minimum: MIN_DOMAN_DISPLAY_MS,
+    maximum: MAX_DOMAN_DISPLAY_MS,
+  })
   @IsOptional()
   @IsInt()
-  @Min(200)
-  @Max(10000)
+  @Min(MIN_DOMAN_DISPLAY_MS)
+  @Max(MAX_DOMAN_DISPLAY_MS)
   display_ms?: number;
 
   @ApiPropertyOptional({ enum: AUDIO_MODES, default: 'manual' })

@@ -247,6 +247,41 @@ export class StudyPlansRepository implements IStudyPlansRepository {
     return doc ? this.toEntity(doc) : null;
   }
 
+  async restore(plan: DomanStudyPlan): Promise<void> {
+    if (!Types.ObjectId.isValid(plan.id)) {
+      return;
+    }
+    const $set: Document = {
+      name: plan.name,
+      start_date: plan.start_date,
+      end_date: plan.end_date,
+      sessions_per_day: plan.sessions_per_day,
+      display_ms: plan.display_ms,
+      audio_mode: plan.audio_mode,
+      mode: plan.mode,
+      status: plan.status,
+      levels: plan.levels.map((level) => this.toLevelDocument(level)),
+      updated_at: plan.updated_at,
+    };
+    const update: Document = { $set };
+    if (plan.description !== undefined) {
+      $set.description = plan.description;
+    } else {
+      // El plan original no tenía descripción: un `$set: undefined` no la
+      // borraría, hay que quitarla explícitamente.
+      update.$unset = { description: '' };
+    }
+    await this.coll().updateOne({ _id: new Types.ObjectId(plan.id) }, update);
+  }
+
+  async delete(id: string): Promise<boolean> {
+    if (!Types.ObjectId.isValid(id)) {
+      return false;
+    }
+    const result = await this.coll().deleteOne({ _id: new Types.ObjectId(id) });
+    return result.deletedCount > 0;
+  }
+
   async findOverlappingActive(
     studentIds: string[],
     startDate: Date,
@@ -274,7 +309,10 @@ export class StudyPlansRepository implements IStudyPlansRepository {
     if (excludeId && Types.ObjectId.isValid(excludeId)) {
       query._id = { $ne: new Types.ObjectId(excludeId) };
     }
-    const doc = await this.coll().findOne(query);
+    // Ordenar por `_id` hace determinista cuál solapamiento se reporta y, sobre
+    // todo, permite desempatar una carrera: siempre devuelve el plan más
+    // antiguo de los que solapan.
+    const doc = await this.coll().findOne(query, { sort: { _id: 1 } });
     return doc ? this.toEntity(doc) : null;
   }
 

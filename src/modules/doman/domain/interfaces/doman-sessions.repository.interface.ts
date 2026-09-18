@@ -39,6 +39,12 @@ export interface IDomanSessionsRepository {
     patch: DomanSessionPatchPayload,
   ): Promise<DomanSession | null>;
   restoreByIds(ids: string[]): Promise<void>;
+  /**
+   * Reinserta sesiones borradas conservando su `_id` original, de modo que las
+   * filas de `doman_session_cards` que las referencian vuelvan a resolver.
+   * Compensa una regeneración fallida; no hay transacciones multi-documento.
+   */
+  restoreMany(sessions: DomanSession[]): Promise<void>;
   deleteById(id: string): Promise<boolean>;
   deleteByDailyPlanId(dailyPlanId: string): Promise<void>;
 }

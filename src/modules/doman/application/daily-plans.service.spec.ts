@@ -38,16 +38,19 @@ describe('DailyPlansService', () => {
     findByStudentAndPlanDate: jest.fn(),
     create: jest.fn(),
     update: jest.fn(),
+    restore: jest.fn(),
     delete: jest.fn(),
   };
   const sessionsRepository = {
     findByDailyPlanId: jest.fn(),
     deleteByDailyPlanId: jest.fn(),
+    restoreMany: jest.fn(),
     create: jest.fn(),
   };
   const sessionCardsRepository = {
     listBySessionId: jest.fn(),
     deleteBySessionIds: jest.fn(),
+    restoreMany: jest.fn(),
     createMany: jest.fn(),
   };
   const wordCardsRepository = {
@@ -541,6 +544,164 @@ describe('DailyPlansService', () => {
     );
     sessionCardsRepository.createMany.mockResolvedValue(undefined);
   }
+
+  it('reporta cards_count 0 cuando no hay tarjetas resueltas, sin inventar el target', async () => {
+    jest.useFakeTimers().setSystemTime(now);
+    const plan = buildPlan(studentId); // target_cards_count: 3
+    dailyPlansRepository.findByStudentAndPlanDate.mockResolvedValue(plan);
+    sessionsRepository.findByDailyPlanId.mockResolvedValue([
+      buildSession(studentId),
+    ]);
+    // Las sesiones existen pero ninguna tarjeta puente resuelve.
+    sessionCardsRepository.listBySessionId.mockResolvedValue([]);
+
+    const summary = await service.getToday(
+      studentId,
+      categoryId,
+      studentRequester,
+    );
+
+    // Antes devolvía cards_count: 3 junto a cards: [].
+    expect(summary.cards).toEqual([]);
+    expect(summary.cards_count).toBe(0);
+    // La intención guardada sigue disponible en el propio plan.
+    expect(summary.plan.target_cards_count).toBe(3);
+  });
+
+  describe('compensación de una regeneración con force', () => {
+    /**
+     * Prepara un plan existente con una sesión y sus tarjetas persistidas, de
+     * modo que `force: true` entre por la rama destructiva.
+     */
+    function primeForcedRegeneration(): {
+      existingPlan: ReturnType<typeof buildPlan>;
+      existingSession: ReturnType<typeof buildSession>;
+      persistedCards: ReturnType<typeof buildPersistedSessionCards>;
+    } {
+      const existingPlan = buildPlan(studentId);
+      const existingSession = buildSession(studentId);
+      const persistedCards = buildPersistedSessionCards(buildCards(studentId));
+
+      categoriesService.findById.mockResolvedValue({ id: categoryId });
+      wordCardsRepository.listByStudentCategoryAndStatuses.mockResolvedValue(
+        buildCards(studentId),
+      );
+      dailyPlansRepository.findByStudentAndPlanDate.mockResolvedValue(
+        existingPlan,
+      );
+      sessionsRepository.findByDailyPlanId.mockResolvedValue([existingSession]);
+      sessionCardsRepository.listBySessionId.mockResolvedValue(persistedCards);
+      sessionCardsRepository.deleteBySessionIds.mockResolvedValue(undefined);
+      sessionsRepository.deleteByDailyPlanId.mockResolvedValue(undefined);
+      dailyPlansRepository.update.mockResolvedValue(existingPlan);
+
+      return { existingPlan, existingSession, persistedCards };
+    }
+
+    it('restaura el plan, las sesiones y las tarjetas cuando falla la creación de sesiones', async () => {
+      const { existingPlan, existingSession, persistedCards } =
+        primeForcedRegeneration();
+      sessionsRepository.create.mockRejectedValue(
+        new Error('session insert timed out'),
+      );
+
+      await expect(
+        service.generate(
+          { student_id: studentId, category_id: categoryId, force: true },
+          teacherRequester,
+        ),
+      ).rejects.toThrow('session insert timed out');
+
+      // Las sesiones originales vuelven con su _id, para que las filas puente
+      // restauradas sigan resolviendo.
+      expect(sessionsRepository.restoreMany).toHaveBeenCalledWith([
+        existingSession,
+      ]);
+      // Las filas puente se reinsertan sin la tarjeta expandida por $lookup.
+      expect(sessionCardsRepository.restoreMany).toHaveBeenCalledWith(
+        persistedCards.map(({ word_card: _ignored, ...row }) => row),
+      );
+      expect(dailyPlansRepository.restore).toHaveBeenCalledWith(existingPlan);
+      // Un plan preexistente nunca se borra al compensar.
+      expect(dailyPlansRepository.delete).not.toHaveBeenCalled();
+    });
+
+    it('compensa también cuando falla el update del plan, antes de crear sesiones', async () => {
+      const { existingPlan, existingSession } = primeForcedRegeneration();
+      dailyPlansRepository.update.mockRejectedValue(
+        new Error('plan update failed'),
+      );
+
+      await expect(
+        service.generate(
+          { student_id: studentId, category_id: categoryId, force: true },
+          teacherRequester,
+        ),
+      ).rejects.toThrow('plan update failed');
+
+      expect(sessionsRepository.restoreMany).toHaveBeenCalledWith([
+        existingSession,
+      ]);
+      expect(dailyPlansRepository.restore).toHaveBeenCalledWith(existingPlan);
+      expect(sessionsRepository.create).not.toHaveBeenCalled();
+    });
+
+    it('propaga el error original aunque la compensación falle', async () => {
+      primeForcedRegeneration();
+      sessionsRepository.create.mockRejectedValue(
+        new Error('session insert timed out'),
+      );
+      sessionsRepository.restoreMany.mockRejectedValue(
+        new Error('restore also failed'),
+      );
+
+      await expect(
+        service.generate(
+          { student_id: studentId, category_id: categoryId, force: true },
+          teacherRequester,
+        ),
+      ).rejects.toThrow('session insert timed out');
+    });
+
+    it('borra el plan recién creado cuando la generación falla sin plan previo', async () => {
+      prepareSuccessfulGeneration(studentId);
+      sessionsRepository.create.mockRejectedValue(new Error('boom'));
+      sessionsRepository.findByDailyPlanId.mockResolvedValue([]);
+
+      await expect(
+        service.generate(
+          { student_id: studentId, category_id: categoryId },
+          teacherRequester,
+        ),
+      ).rejects.toThrow('boom');
+
+      expect(dailyPlansRepository.delete).toHaveBeenCalledWith(planId);
+      expect(dailyPlansRepository.restore).not.toHaveBeenCalled();
+    });
+  });
+
+  it('resuelve la categoría del plan de estudio ignorando el case del ObjectId', async () => {
+    const studyPlan = buildStudyPlan([studentId], {
+      category_id: categoryId,
+      target_cards_count: 3,
+    });
+    studyPlansRepository.findActiveForStudentAndDate.mockResolvedValue(
+      studyPlan,
+    );
+    prepareSuccessfulGeneration(studentId);
+
+    // `@IsMongoId()` acepta hex en mayúsculas, pero el repositorio devuelve
+    // siempre minúsculas: con `===` esto devolvía un 404 falso.
+    await expect(
+      service.generate(
+        {
+          student_id: studentId,
+          category_id: categoryId.toUpperCase(),
+        },
+        teacherRequester,
+      ),
+    ).resolves.toMatchObject({ plan: { id: planId } });
+  });
 
   function buildPlan(targetStudentId: string, selectedCategoryId = categoryId) {
     return {

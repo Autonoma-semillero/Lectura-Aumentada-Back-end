@@ -1,4 +1,7 @@
-import { DomanSessionCard } from './doman-session-card.interface';
+import {
+  DomanSessionCard,
+  DomanSessionCardSnapshot,
+} from './doman-session-card.interface';
 
 export interface DomanSessionCardInsertPayload {
   sessionId: string;
@@ -16,5 +19,10 @@ export interface IDomanSessionCardsRepository {
   touchDisplayedAt(sessionId: string, wordCardId: string, when: Date): Promise<void>;
   touchAudioPlayedAt(sessionId: string, wordCardId: string, when: Date): Promise<void>;
   resetBySessionIds(sessionIds: string[]): Promise<void>;
+  /**
+   * Reinserta filas puente borradas conservando `_id`, `order_index` y las
+   * marcas de exposición, para compensar una regeneración fallida.
+   */
+  restoreMany(cards: DomanSessionCardSnapshot[]): Promise<void>;
   deleteBySessionIds(sessionIds: string[]): Promise<void>;
 }

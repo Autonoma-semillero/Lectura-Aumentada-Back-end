@@ -28,6 +28,12 @@ import {
   STUDY_PLAN_STATUSES,
   StudyPlanLevelDto,
 } from './create-study-plan.dto';
+import {
+  MAX_DAILY_PLAN_TARGET_SESSIONS,
+  MAX_DOMAN_DISPLAY_MS,
+  MIN_DAILY_PLAN_TARGET_SESSIONS,
+  MIN_DOMAN_DISPLAY_MS,
+} from '../domain/constants/doman-limits.constants';
 
 export class UpdateStudyPlanDto {
   @ApiPropertyOptional()
@@ -86,18 +92,24 @@ export class UpdateStudyPlanDto {
   @IsDateString()
   end_date?: string;
 
-  @ApiPropertyOptional({ minimum: 1, maximum: 10 })
+  @ApiPropertyOptional({
+    minimum: MIN_DAILY_PLAN_TARGET_SESSIONS,
+    maximum: MAX_DAILY_PLAN_TARGET_SESSIONS,
+  })
   @IsOptional()
   @IsInt()
-  @Min(1)
-  @Max(10)
+  @Min(MIN_DAILY_PLAN_TARGET_SESSIONS)
+  @Max(MAX_DAILY_PLAN_TARGET_SESSIONS)
   sessions_per_day?: number;
 
-  @ApiPropertyOptional({ minimum: 200, maximum: 10000 })
+  @ApiPropertyOptional({
+    minimum: MIN_DOMAN_DISPLAY_MS,
+    maximum: MAX_DOMAN_DISPLAY_MS,
+  })
   @IsOptional()
   @IsInt()
-  @Min(200)
-  @Max(10000)
+  @Min(MIN_DOMAN_DISPLAY_MS)
+  @Max(MAX_DOMAN_DISPLAY_MS)
   display_ms?: number;
 
   @ApiPropertyOptional({ enum: AUDIO_MODES })

@@ -10,3 +10,10 @@ export interface DomanSessionCard {
   created_at: Date;
   word_card?: WordCardListed;
 }
+
+/**
+ * Fila de `doman_session_cards` capturada antes de una regeneración
+ * destructiva. Excluye la tarjeta expandida por `$lookup` porque la
+ * restauración solo reinserta la fila puente, nunca la tarjeta.
+ */
+export type DomanSessionCardSnapshot = Omit<DomanSessionCard, 'word_card'>;

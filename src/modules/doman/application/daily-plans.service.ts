@@ -3,6 +3,7 @@ import {
   ConflictException,
   Inject,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { MongoServerError } from 'mongodb';
@@ -11,6 +12,17 @@ import { CategoriesService } from '../../categories/application/categories.servi
 import { WORD_CARDS_REPOSITORY } from '../../categories/domain/constants/categories.tokens';
 import { WordCardListed } from '../../categories/domain/interfaces/word-card-listed.interface';
 import { IWordCardsRepository } from '../../categories/domain/interfaces/word-cards.repository.interface';
+import {
+  DEFAULT_DAILY_PLAN_TARGET_CARDS,
+  DEFAULT_DAILY_PLAN_TARGET_SESSIONS,
+  DEFAULT_DOMAN_DISPLAY_MS,
+  MAX_DAILY_PLAN_TARGET_CARDS,
+  MAX_DAILY_PLAN_TARGET_SESSIONS,
+  MAX_DOMAN_DISPLAY_MS,
+  MIN_DAILY_PLAN_TARGET_CARDS,
+  MIN_DAILY_PLAN_TARGET_SESSIONS,
+  MIN_DOMAN_DISPLAY_MS,
+} from '../domain/constants/doman-limits.constants';
 import {
   DAILY_PLANS_REPOSITORY,
   DOMAN_SESSION_CARDS_REPOSITORY,
@@ -28,7 +40,9 @@ import type {
   DomanStudyPlanCategory,
   DomanStudyPlanLevel,
 } from '../domain/interfaces/doman-study-plan.interface';
+import type { DomanSessionCardSnapshot } from '../domain/interfaces/doman-session-card.interface';
 import { IDomanSessionCardsRepository } from '../domain/interfaces/doman-session-cards.repository.interface';
+import type { DomanSession } from '../domain/interfaces/doman-session.interface';
 import { IDomanSessionsRepository } from '../domain/interfaces/doman-sessions.repository.interface';
 import type { IStudyPlansRepository } from '../domain/interfaces/study-plans.repository.interface';
 import { DomanRequester } from '../domain/types/doman-requester.type';
@@ -46,10 +60,15 @@ import {
   planDateToUtcMidnight,
   todayPlanDateUtcMidnight,
 } from './plan-date.util';
-import { sortDomanCardsByPriority } from './word-card-selection.util';
+import {
+  resolveEligibleDomanCards,
+  resolveStudyPlanCategoryCards,
+} from './word-card-selection.util';
 
 @Injectable()
 export class DailyPlansService {
+  private readonly logger = new Logger(DailyPlansService.name);
+
   constructor(
     @Inject(DAILY_PLANS_REPOSITORY)
     private readonly dailyPlansRepository: IDailyPlansRepository,
@@ -209,19 +228,25 @@ export class DailyPlansService {
       dto.category_id,
     );
     let targetCardsCount = this.clamp(
-      dto.target_cards_count ?? studyContext?.category.target_cards_count ?? 5,
-      1,
-      50,
+      dto.target_cards_count ??
+        studyContext?.category.target_cards_count ??
+        DEFAULT_DAILY_PLAN_TARGET_CARDS,
+      MIN_DAILY_PLAN_TARGET_CARDS,
+      MAX_DAILY_PLAN_TARGET_CARDS,
     );
     const targetSessionsCount = this.clamp(
-      dto.target_sessions_count ?? studyContext?.plan.sessions_per_day ?? 5,
-      1,
-      10,
+      dto.target_sessions_count ??
+        studyContext?.plan.sessions_per_day ??
+        DEFAULT_DAILY_PLAN_TARGET_SESSIONS,
+      MIN_DAILY_PLAN_TARGET_SESSIONS,
+      MAX_DAILY_PLAN_TARGET_SESSIONS,
     );
     const displayMs = this.clamp(
-      dto.display_ms ?? studyContext?.plan.display_ms ?? 2200,
-      200,
-      10000,
+      dto.display_ms ??
+        studyContext?.plan.display_ms ??
+        DEFAULT_DOMAN_DISPLAY_MS,
+      MIN_DOMAN_DISPLAY_MS,
+      MAX_DOMAN_DISPLAY_MS,
     );
     const force = dto.force ?? false;
 
@@ -241,11 +266,7 @@ export class DailyPlansService {
       planDate,
       categoryId,
     );
-    let existingSessions: Array<{
-      id: string;
-      status: string;
-      session_index: number;
-    }> = [];
+    let existingSessions: DomanSession[] = [];
     if (existing) {
       existingSessions = await this.sessionsRepository.findByDailyPlanId(
         existing.id,
@@ -278,7 +299,10 @@ export class DailyPlansService {
     targetCardsCount = selectedCards.length;
 
     let plan: DomanDailyPlan;
-    let createdNewPlan = false;
+    // Compensación a ejecutar si la generación falla después de haber tocado
+    // la base. Mongo no da transacciones multi-documento acá, así que cada
+    // rama declara explícitamente cómo se deshace.
+    let compensate: () => Promise<void>;
     if (!existing) {
       plan = await this.dailyPlansRepository.create({
         studentId: dto.student_id,
@@ -295,34 +319,49 @@ export class DailyPlansService {
           ? `Generated from study plan: ${studyContext.plan.name}`
           : 'Auto-generated daily plan',
       });
-      createdNewPlan = true;
+      const createdPlanId = plan.id;
+      compensate = () => this.cleanupFailedNewPlan(createdPlanId);
     } else {
-      await this.sessionCardsRepository.deleteBySessionIds(
-        existingSessions.map((session) => session.id),
-      );
-      await this.sessionsRepository.deleteByDailyPlanId(existing.id);
-      const updated = await this.dailyPlansRepository.update(existing.id, {
-        targetCardsCount: selectedCards.length,
-        targetSessionsCount,
-        categoryId,
-        studyPlanId: studyContext?.plan.id,
-        studyPlanLevelId: studyContext?.level.id,
-        algorithmVersion: studyContext
-          ? this.studyPlanAlgorithmVersion(studyContext.plan)
-          : 'doman-mvp-v1',
-        notes: force ? 'Regenerated daily plan' : 'Generated daily plan',
-      });
-      if (!updated) {
-        throw new NotFoundException('Daily plan not found');
+      // Capturar lo que la regeneración está por destruir ANTES de borrarlo:
+      // sin este snapshot una falla al recrear las sesiones deja el plan sin
+      // sesiones y sin forma de recuperar las originales.
+      const snapshotPlan = existing;
+      const snapshotSessions = existingSessions;
+      const snapshotCards = await this.snapshotSessionCards(snapshotSessions);
+      compensate = () =>
+        this.restoreRegeneratedPlan(
+          snapshotPlan,
+          snapshotSessions,
+          snapshotCards,
+        );
+
+      try {
+        await this.sessionCardsRepository.deleteBySessionIds(
+          snapshotSessions.map((session) => session.id),
+        );
+        await this.sessionsRepository.deleteByDailyPlanId(existing.id);
+        const updated = await this.dailyPlansRepository.update(existing.id, {
+          targetCardsCount: selectedCards.length,
+          targetSessionsCount,
+          categoryId,
+          studyPlanId: studyContext?.plan.id,
+          studyPlanLevelId: studyContext?.level.id,
+          algorithmVersion: studyContext
+            ? this.studyPlanAlgorithmVersion(studyContext.plan)
+            : 'doman-mvp-v1',
+          notes: force ? 'Regenerated daily plan' : 'Generated daily plan',
+        });
+        if (!updated) {
+          throw new NotFoundException('Daily plan not found');
+        }
+        plan = updated;
+      } catch (error) {
+        await compensate();
+        throw error;
       }
-      plan = updated;
     }
 
-    let sessions: Array<{
-      id: string;
-      status: string;
-      session_index: number;
-    }>;
+    let sessions: DomanSession[];
     try {
       sessions = await this.createSessionsForPlan(
         plan,
@@ -333,9 +372,7 @@ export class DailyPlansService {
         studyContext?.plan.mode ?? 'auto',
       );
     } catch (error) {
-      if (createdNewPlan) {
-        await this.cleanupFailedNewPlan(plan.id);
-      }
+      await compensate();
       throw error;
     }
     return {
@@ -347,13 +384,7 @@ export class DailyPlansService {
   async delete(id: string, requester: DomanRequester): Promise<void> {
     assertCanManageDoman(requester);
     await this.requirePlan(id);
-    const sessions = await this.sessionsRepository.findByDailyPlanId(id);
-    if (sessions.length > 0) {
-      await this.sessionCardsRepository.deleteBySessionIds(
-        sessions.map((s) => s.id),
-      );
-      await this.sessionsRepository.deleteByDailyPlanId(id);
-    }
+    await this.purgeSessionsForPlan(id);
     await this.dailyPlansRepository.delete(id);
   }
 
@@ -435,12 +466,8 @@ export class DailyPlansService {
     displayMs: number,
     audioMode: 'auto' | 'manual' | 'disabled' = 'manual',
     mode: 'manual' | 'auto' = 'auto',
-  ) {
-    const sessions: Array<{
-      id: string;
-      status: string;
-      session_index: number;
-    }> = [];
+  ): Promise<DomanSession[]> {
+    const sessions: DomanSession[] = [];
 
     for (
       let sessionIndex = 1;
@@ -457,11 +484,7 @@ export class DailyPlansService {
         status: 'planned',
         mode,
       });
-      sessions.push({
-        id: session.id,
-        status: session.status,
-        session_index: session.session_index,
-      });
+      sessions.push(session);
       await this.sessionCardsRepository.createMany(
         cards.map((card, orderIndex) => ({
           sessionId: session.id,
@@ -475,6 +498,19 @@ export class DailyPlansService {
   }
 
   private async cleanupFailedNewPlan(planId: string): Promise<void> {
+    try {
+      await this.purgeSessionsForPlan(planId);
+      await this.dailyPlansRepository.delete(planId);
+    } catch (cleanupError) {
+      // Nunca enmascarar el error original de la generación.
+      this.logger.error(
+        `Failed to clean up daily plan ${planId} after a failed generation`,
+        cleanupError instanceof Error ? cleanupError.stack : undefined,
+      );
+    }
+  }
+
+  private async purgeSessionsForPlan(planId: string): Promise<void> {
     const sessions = await this.sessionsRepository.findByDailyPlanId(planId);
     if (sessions.length > 0) {
       await this.sessionCardsRepository.deleteBySessionIds(
@@ -482,7 +518,47 @@ export class DailyPlansService {
       );
       await this.sessionsRepository.deleteByDailyPlanId(planId);
     }
-    await this.dailyPlansRepository.delete(planId);
+  }
+
+  private async snapshotSessionCards(
+    sessions: DomanSession[],
+  ): Promise<DomanSessionCardSnapshot[]> {
+    const snapshots: DomanSessionCardSnapshot[] = [];
+    for (const session of sessions) {
+      const cards = await this.sessionCardsRepository.listBySessionId(
+        session.id,
+      );
+      for (const card of cards) {
+        const { word_card: _expandedWordCard, ...row } = card;
+        snapshots.push(row);
+      }
+    }
+    return snapshots;
+  }
+
+  /**
+   * Deshace una regeneración fallida: descarta lo que quedó a medio crear y
+   * reinserta el plan, las sesiones y las filas puente originales.
+   */
+  private async restoreRegeneratedPlan(
+    plan: DomanDailyPlan,
+    sessions: DomanSession[],
+    cards: DomanSessionCardSnapshot[],
+  ): Promise<void> {
+    try {
+      await this.purgeSessionsForPlan(plan.id);
+      await this.sessionsRepository.restoreMany(sessions);
+      await this.sessionCardsRepository.restoreMany(cards);
+      await this.dailyPlansRepository.restore(plan);
+    } catch (restoreError) {
+      // Nunca enmascarar el error original de la generación: el cliente debe
+      // ver por qué falló, y el operador necesita saber que quedó a medias.
+      this.logger.error(
+        `Failed to restore daily plan ${plan.id} after a failed regeneration; ` +
+          `${sessions.length} session(s) and ${cards.length} session card(s) may be missing`,
+        restoreError instanceof Error ? restoreError.stack : undefined,
+      );
+    }
   }
 
   private async resolveDefaultCategoryId(
@@ -495,28 +571,17 @@ export class DailyPlansService {
     return selectDefaultCategoryId(counts);
   }
 
-  private async resolveCards(
+  private resolveCards(
     studentId: string,
     categoryId: string,
     limit: number,
   ): Promise<WordCardListed[]> {
-    const primary =
-      await this.wordCardsRepository.listByStudentCategoryAndStatuses(
-        studentId,
-        categoryId,
-        ['new', 'active'],
-      );
-    let candidateCards = primary;
-    if (candidateCards.length < limit) {
-      const fallback =
-        await this.wordCardsRepository.listByStudentCategoryAndStatuses(
-          studentId,
-          categoryId,
-          ['completed'],
-        );
-      candidateCards = candidateCards.concat(fallback);
-    }
-    return sortDomanCardsByPriority(candidateCards).slice(0, limit);
+    return resolveEligibleDomanCards(
+      this.wordCardsRepository,
+      studentId,
+      categoryId,
+      limit,
+    );
   }
 
   private async resolvePersistedCards(
@@ -538,25 +603,14 @@ export class DailyPlansService {
     return [];
   }
 
-  private async resolveConfiguredCards(
+  private resolveConfiguredCards(
     category: DomanStudyPlanCategory,
     studentId: string,
   ): Promise<WordCardListed[]> {
-    if (category.word_card_ids !== undefined) {
-      const cards = await this.wordCardsRepository.findByIds(
-        category.word_card_ids,
-      );
-      return cards.filter(
-        (card) =>
-          isSameObjectId(card.student_id, studentId) &&
-          isSameObjectId(card.category_id ?? '', category.category_id) &&
-          card.status !== 'archived',
-      );
-    }
-    return this.resolveCards(
+    return resolveStudyPlanCategoryCards(
+      this.wordCardsRepository,
+      category,
       studentId,
-      category.category_id,
-      category.target_cards_count ?? 5,
     );
   }
 
@@ -603,9 +657,12 @@ export class DailyPlansService {
         'No study plan level is scheduled for this date',
       );
     }
+    // El repositorio devuelve los ObjectId en minúsculas (`toHexString`) pero
+    // `@IsMongoId()` acepta hex en mayúsculas: comparar con `===` produce un
+    // 404 falso sobre una categoría que sí está configurada.
     const category = categoryId
-      ? level.categories.find(
-          (candidate) => candidate.category_id === categoryId,
+      ? level.categories.find((candidate) =>
+          isSameObjectId(candidate.category_id, categoryId),
         )
       : level.categories[0];
     if (!category) {
@@ -633,7 +690,11 @@ export class DailyPlansService {
   ): DomanDailyPlanSummary {
     return {
       plan,
-      cards_count: cards.length || plan.target_cards_count,
+      // Siempre el tamaño real de `cards`. Caer a `target_cards_count` cuando
+      // la lista viene vacía hacía que la respuesta dijera `cards_count: 5`
+      // junto a `cards: []`; quien necesite la intención guardada la tiene en
+      // `plan.target_cards_count`, que viaja en esta misma respuesta.
+      cards_count: cards.length,
       cards: cards.map((card) => ({
         id: card.id,
         word: card.word,

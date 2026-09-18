@@ -2,7 +2,10 @@ import { Inject, Injectable } from '@nestjs/common';
 import type { Document } from 'mongodb';
 import { Connection, Types } from 'mongoose';
 import { MONGO_CONNECTION } from '../../../../database/mongodb.providers';
-import { DomanSessionCard } from '../../domain/interfaces/doman-session-card.interface';
+import {
+  DomanSessionCard,
+  DomanSessionCardSnapshot,
+} from '../../domain/interfaces/doman-session-card.interface';
 import {
   DomanSessionCardInsertPayload,
   IDomanSessionCardsRepository,
@@ -136,6 +139,37 @@ export class DomanSessionCardsRepository implements IDomanSessionCardsRepository
       },
       { $set: { audio_played_at: when } },
     );
+  }
+
+  async restoreMany(cards: DomanSessionCardSnapshot[]): Promise<void> {
+    const docs = cards
+      .filter(
+        (card) =>
+          Types.ObjectId.isValid(card.id) &&
+          Types.ObjectId.isValid(card.session_id) &&
+          Types.ObjectId.isValid(card.word_card_id),
+      )
+      .map((card) => {
+        const doc: Document = {
+          _id: new Types.ObjectId(card.id),
+          session_id: new Types.ObjectId(card.session_id),
+          word_card_id: new Types.ObjectId(card.word_card_id),
+          order_index: card.order_index,
+          created_at: card.created_at,
+        };
+        if (card.displayed_at !== undefined) {
+          doc.displayed_at = card.displayed_at;
+        }
+        if (card.audio_played_at !== undefined) {
+          doc.audio_played_at = card.audio_played_at;
+        }
+        return doc;
+      });
+    if (docs.length === 0) {
+      return;
+    }
+    // `ordered: false` para que una fila ya reinsertada no aborte el resto.
+    await this.coll().insertMany(docs, { ordered: false });
   }
 
   async deleteBySessionIds(sessionIds: string[]): Promise<void> {

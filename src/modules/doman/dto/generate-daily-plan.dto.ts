@@ -8,6 +8,14 @@ import {
   Max,
   Min,
 } from 'class-validator';
+import {
+  MAX_DAILY_PLAN_TARGET_CARDS,
+  MAX_DAILY_PLAN_TARGET_SESSIONS,
+  MAX_DOMAN_DISPLAY_MS,
+  MIN_DAILY_PLAN_TARGET_CARDS,
+  MIN_DAILY_PLAN_TARGET_SESSIONS,
+  MIN_DOMAN_DISPLAY_MS,
+} from '../domain/constants/doman-limits.constants';
 
 export class GenerateDailyPlanDto {
   @ApiProperty({ description: 'ObjectId del estudiante' })
@@ -29,25 +37,34 @@ export class GenerateDailyPlanDto {
   @IsDateString()
   plan_date?: string;
 
-  @ApiPropertyOptional({ minimum: 3, maximum: 8 })
+  @ApiPropertyOptional({
+    minimum: MIN_DAILY_PLAN_TARGET_CARDS,
+    maximum: MAX_DAILY_PLAN_TARGET_CARDS,
+  })
   @IsOptional()
   @IsNumber()
-  @Min(3)
-  @Max(8)
+  @Min(MIN_DAILY_PLAN_TARGET_CARDS)
+  @Max(MAX_DAILY_PLAN_TARGET_CARDS)
   target_cards_count?: number;
 
-  @ApiPropertyOptional({ minimum: 1, maximum: 5 })
+  @ApiPropertyOptional({
+    minimum: MIN_DAILY_PLAN_TARGET_SESSIONS,
+    maximum: MAX_DAILY_PLAN_TARGET_SESSIONS,
+  })
   @IsOptional()
   @IsNumber()
-  @Min(1)
-  @Max(5)
+  @Min(MIN_DAILY_PLAN_TARGET_SESSIONS)
+  @Max(MAX_DAILY_PLAN_TARGET_SESSIONS)
   target_sessions_count?: number;
 
-  @ApiPropertyOptional({ minimum: 800, maximum: 6000 })
+  @ApiPropertyOptional({
+    minimum: MIN_DOMAN_DISPLAY_MS,
+    maximum: MAX_DOMAN_DISPLAY_MS,
+  })
   @IsOptional()
   @IsNumber()
-  @Min(800)
-  @Max(6000)
+  @Min(MIN_DOMAN_DISPLAY_MS)
+  @Max(MAX_DOMAN_DISPLAY_MS)
   display_ms?: number;
 
   @ApiPropertyOptional()

@@ -186,6 +186,46 @@ export class DomanSessionsRepository implements IDomanSessionsRepository {
     );
   }
 
+  async restoreMany(sessions: DomanSession[]): Promise<void> {
+    const docs = sessions
+      .filter(
+        (session) =>
+          Types.ObjectId.isValid(session.id) &&
+          Types.ObjectId.isValid(session.student_id) &&
+          Types.ObjectId.isValid(session.daily_plan_id) &&
+          Types.ObjectId.isValid(session.category_id),
+      )
+      .map((session) => {
+        const doc: Document = {
+          _id: new Types.ObjectId(session.id),
+          student_id: new Types.ObjectId(session.student_id),
+          daily_plan_id: new Types.ObjectId(session.daily_plan_id),
+          session_index: session.session_index,
+          category_id: new Types.ObjectId(session.category_id),
+          display_ms: session.display_ms,
+          audio_mode: session.audio_mode,
+          status: session.status,
+          created_at: session.created_at,
+          updated_at: session.updated_at,
+        };
+        if (session.mode !== undefined) {
+          doc.mode = session.mode;
+        }
+        if (session.started_at !== undefined) {
+          doc.started_at = session.started_at;
+        }
+        if (session.completed_at !== undefined) {
+          doc.completed_at = session.completed_at;
+        }
+        return doc;
+      });
+    if (docs.length === 0) {
+      return;
+    }
+    // `ordered: false` para que una sesión ya reinsertada no aborte el resto.
+    await this.coll().insertMany(docs, { ordered: false });
+  }
+
   async deleteById(id: string): Promise<boolean> {
     if (!Types.ObjectId.isValid(id)) {
       return false;

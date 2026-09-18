@@ -144,6 +144,40 @@ export class DailyPlansRepository implements IDailyPlansRepository {
     return result.deletedCount > 0;
   }
 
+  async restore(plan: DomanDailyPlan): Promise<void> {
+    if (!Types.ObjectId.isValid(plan.id)) {
+      return;
+    }
+    const doc: Document = {
+      student_id: new Types.ObjectId(plan.student_id),
+      plan_date: plan.plan_date,
+      target_cards_count: plan.target_cards_count,
+      target_sessions_count: plan.target_sessions_count,
+      category_id: new Types.ObjectId(plan.category_id),
+      created_at: plan.created_at,
+      updated_at: plan.updated_at,
+    };
+    if (plan.study_plan_id !== undefined) {
+      doc.study_plan_id = new Types.ObjectId(plan.study_plan_id);
+    }
+    if (plan.study_plan_level_id !== undefined) {
+      doc.study_plan_level_id = new Types.ObjectId(plan.study_plan_level_id);
+    }
+    if (plan.algorithm_version !== undefined) {
+      doc.algorithm_version = plan.algorithm_version;
+    }
+    if (plan.notes !== undefined) {
+      doc.notes = plan.notes;
+    }
+    // `upsert` porque la compensación también cubre el caso en que el plan ya
+    // hubiera sido borrado por otra vía.
+    await this.coll().replaceOne(
+      { _id: new Types.ObjectId(plan.id) },
+      doc,
+      { upsert: true },
+    );
+  }
+
   async update(
     id: string,
     patch: DailyPlanPatchPayload,

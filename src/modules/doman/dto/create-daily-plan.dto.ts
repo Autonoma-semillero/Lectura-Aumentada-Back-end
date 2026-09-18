@@ -9,6 +9,12 @@ import {
   MaxLength,
   Min,
 } from 'class-validator';
+import {
+  MAX_DAILY_PLAN_TARGET_CARDS,
+  MAX_DAILY_PLAN_TARGET_SESSIONS,
+  MIN_DAILY_PLAN_TARGET_CARDS,
+  MIN_DAILY_PLAN_TARGET_SESSIONS,
+} from '../domain/constants/doman-limits.constants';
 
 export class CreateDailyPlanDto {
   @ApiProperty()
@@ -22,16 +28,22 @@ export class CreateDailyPlanDto {
   @IsDateString()
   plan_date!: string;
 
-  @ApiProperty({ minimum: 1, maximum: 50 })
+  @ApiProperty({
+    minimum: MIN_DAILY_PLAN_TARGET_CARDS,
+    maximum: MAX_DAILY_PLAN_TARGET_CARDS,
+  })
   @IsInt()
-  @Min(1)
-  @Max(50)
+  @Min(MIN_DAILY_PLAN_TARGET_CARDS)
+  @Max(MAX_DAILY_PLAN_TARGET_CARDS)
   target_cards_count!: number;
 
-  @ApiProperty({ minimum: 1, maximum: 10 })
+  @ApiProperty({
+    minimum: MIN_DAILY_PLAN_TARGET_SESSIONS,
+    maximum: MAX_DAILY_PLAN_TARGET_SESSIONS,
+  })
   @IsInt()
-  @Min(1)
-  @Max(10)
+  @Min(MIN_DAILY_PLAN_TARGET_SESSIONS)
+  @Max(MAX_DAILY_PLAN_TARGET_SESSIONS)
   target_sessions_count!: number;
 
   @ApiProperty({

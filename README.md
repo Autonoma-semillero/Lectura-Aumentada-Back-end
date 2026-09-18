@@ -277,24 +277,84 @@ Archivos relevantes (`src/modules/categories/`):
 - `infrastructure/schemas/category.schema.ts`
 - `dto/*.dto.ts`
 
-### 8.7 Doman — planes diarios y sesiones (`doman_daily_plans`, `doman_sessions`)
+### 8.7 Doman — planes, sesiones y progreso
 
-Temática activa del plan / sesión: **`category_id`** → `categories._id`, mismo criterio que **`doman_word_cards.category_id`** (README §2.1). Un estudiante puede tener un plan por temática el mismo día; la unicidad es `(student_id, plan_date, category_id)`. Evidencia: [`docs/origen/Arquitectura/db/US-BE-F1-02-doman-auth-schema.md`](./docs/origen/Arquitectura/db/US-BE-F1-02-doman-auth-schema.md).
+El módulo `src/modules/doman/` expone **cinco** controladores, todos bajo el prefijo `/api/doman/`. Maneja dos conceptos distintos de "plan":
+
+- **Plan de estudio** (`doman_study_plans`): el plan maestro de un docente. Tiene rango de fechas, niveles ordenados y una audiencia (grupos y/o estudiantes directos) que se **congela** al crearlo.
+- **Plan diario** (`doman_daily_plans`): la materialización de un día concreto para un estudiante y una temática. Se genera a demanda o desde un plan de estudio.
+
+Temática activa del plan / sesión: **`category_id`** → `categories._id`, mismo criterio que **`doman_word_cards.category_id`** (README §2.1). Un estudiante puede tener un plan diario por temática el mismo día; la unicidad es `(student_id, plan_date, category_id)`. Evidencia: [`docs/origen/Arquitectura/db/US-BE-F1-02-doman-auth-schema.md`](./docs/origen/Arquitectura/db/US-BE-F1-02-doman-auth-schema.md).
+
+#### Planes diarios — `/api/doman/daily-plans`
+
+| Método | Ruta | Roles | Descripción |
+|--------|------|-------|-------------|
+| POST | `/api/doman/daily-plans` | teacher, admin | Crea plan (`student_id`, `plan_date`, targets, **`category_id`** obligatorio) |
+| POST | `/api/doman/daily-plans/generate` | student, teacher, admin | Genera plan + sesiones + tarjetas; `force: true` regenera |
+| POST | `/api/doman/daily-plans/bulk-generate` | teacher, admin | Genera para varios estudiantes en una sola llamada |
+| GET | `/api/doman/daily-plans` | student, teacher, admin | Lista por `student_id` + rango `from` / `to` (ISO, UTC); por defecto ~60 días hasta hoy |
+| GET | `/api/doman/daily-plans/today` | student, teacher, admin | Plan de hoy; lo genera si no existe |
+| GET | `/api/doman/daily-plans/:id` | student, teacher, admin | Detalle (incluye `category_id`) |
+| PATCH | `/api/doman/daily-plans/:id` | teacher, admin | Parcial; no permite cambiar `category_id` si ya hay sesiones |
+| DELETE | `/api/doman/daily-plans/:id` | teacher, admin | Borra el plan con sus sesiones y tarjetas |
+
+`generate` con `force: true` es **destructivo**: borra sesiones y tarjetas para recrearlas. Como Mongo no da transacciones multi-documento acá, la operación captura un snapshot antes de borrar y lo reinserta si la recreación falla. Rechaza regenerar si alguna sesión está `completed`.
+
+#### Sesiones — `/api/doman/sessions`
 
 | Método | Ruta | Descripción |
 |--------|------|-------------|
-| POST | `/api/doman-daily-plans` | Crea plan (`student_id`, `plan_date`, targets, **`category_id`** obligatorio) |
-| GET | `/api/doman-daily-plans` | Lista por `student_id` + rango `from` / `to` (ISO fecha, UTC); por defecto ~60 días hasta hoy |
-| GET | `/api/doman-daily-plans/:id` | Detalle (incluye `category_id`) |
-| PATCH | `/api/doman-daily-plans/:id` | Actualización parcial (puede cambiar `category_id`) |
-| POST | `/api/doman-sessions` | Crea sesión; **`category_id` debe coincidir** con el plan diario |
-| GET | `/api/doman-sessions` | Lista por `daily_plan_id` |
-| GET | `/api/doman-sessions/:id` | Detalle |
-| PATCH | `/api/doman-sessions/:id` | Parcial; si se envía `category_id`, debe seguir coincidiendo con el plan |
+| POST | `/api/doman/sessions` | Crea sesión; **`category_id` debe coincidir** con el plan diario |
+| GET | `/api/doman/sessions` | Lista por `daily_plan_id` |
+| GET | `/api/doman/sessions/next` | Próxima sesión pendiente del estudiante |
+| GET | `/api/doman/sessions/history` | Historial de sesiones |
+| GET | `/api/doman/sessions/:id` | Detalle |
+| PATCH | `/api/doman/sessions/:id` | Parcial; si se envía `category_id`, debe seguir coincidiendo con el plan |
+| POST | `/api/doman/sessions/:id/start` | Marca la sesión como iniciada |
+| POST | `/api/doman/sessions/:id/exposures` | Registra una exposición (`doman_exposure_logs`) |
+| POST | `/api/doman/sessions/:id/complete` | Cierra la sesión |
+| POST | `/api/doman/sessions/:id/restore` | Reabre una sesión |
+| DELETE | `/api/doman/sessions/:id` | Elimina una sesión |
+| POST | `/api/doman/sessions/daily-plan/:dailyPlanId` | Agrega sesiones a un plan |
+| POST | `/api/doman/sessions/daily-plan/:dailyPlanId/restore` | Reabre las sesiones del plan |
+| DELETE | `/api/doman/sessions/daily-plan/:dailyPlanId` | Elimina las sesiones del plan |
+
+#### Planes de estudio — `/api/doman/study-plans`
+
+| Método | Ruta | Roles | Descripción |
+|--------|------|-------|-------------|
+| GET | `/api/doman/study-plans` | teacher, admin | Lista; un docente solo ve los suyos, un admin ve todos |
+| GET | `/api/doman/study-plans/active` | student, teacher, admin | Configuración activa del estudiante para una fecha |
+| GET | `/api/doman/study-plans/:id` | teacher, admin | Detalle |
+| POST | `/api/doman/study-plans` | teacher, admin | Crea plan con niveles y audiencia congelada |
+| PATCH | `/api/doman/study-plans/:id` | teacher, admin | Parcial; **la audiencia es inmutable** |
+| POST | `/api/doman/study-plans/:id/generate-day` | teacher, admin | Genera los planes diarios de una fecha para toda la audiencia |
+| DELETE | `/api/doman/study-plans/:id` | teacher, admin | Archiva (`status: archived`), no borra |
+
+Invariantes del plan de estudio:
+
+- Los niveles no se solapan entre sí y viven dentro del rango del plan; `order_index` e `id` son únicos.
+- Una categoría no se repite dentro de un nivel, y no puede definir `target_cards_count` y `word_card_ids` a la vez. `word_card_ids` es **legacy**, solo válido para la audiencia singleton deprecada.
+- Ningún estudiante puede tener dos planes **activos** con rangos solapados. Es una condición de rango, no de igualdad, así que **no existe índice único que la sostenga**: `create` y `update` revalidan después de escribir y desempatan por `_id` (sobrevive el más antiguo), compensando al que pierde.
+- `generate-day` está acotado por `MAX_DOMAN_STUDY_PLAN_DAY_JOBS` y `MAX_DOMAN_STUDY_PLAN_DAY_SESSION_CARDS`, y la audiencia por `MAX_DOMAN_BULK_AUDIENCE_SIZE` (ver `domain/constants/doman-limits.constants.ts`).
+
+#### Asignaciones y progreso
+
+| Método | Ruta | Roles | Descripción |
+|--------|------|-------|-------------|
+| GET | `/api/doman/plan-assignments` | teacher, admin | Lista de asignaciones de plan |
+| GET | `/api/doman/plan-assignments/:id` | teacher, admin | Detalle |
+| GET | `/api/doman/progress/summary` | student, teacher, admin | Resumen de progreso Doman del estudiante |
+
+#### Cotas y autorización
+
+- Los rangos de `target_cards_count` (1–50), `target_sessions_count` (1–10) y `display_ms` (200–10000) viven en **`domain/constants/doman-limits.constants.ts`** y son la única fuente de verdad: DTO, clamps de servicio y validador Mongo deben coincidir.
+- `assertCanAccessStudent` solo acota a los **estudiantes** (acceden únicamente a lo propio). Docentes y administradores tienen visibilidad sobre cualquier estudiante **por diseño**: el modelo acota la propiedad a nivel de grupo (`GroupsService`), no de estudiante.
 
 **Temáticas con tarjetas para un estudiante:** `GET /api/categories/with-available-word-cards?student_id=` — devuelve categorías que tienen al menos una `doman_word_card` de ese estudiante en esa temática, con `available_word_cards_count` (mismo filtro que agregación por `student_id` + `category_id`).
 
-Archivos (`src/modules/doman/`): `doman.module.ts`, `presentation/daily-plans.controller.ts`, `presentation/doman-sessions.controller.ts`, `application/*.service.ts`, `application/plan-date.util.ts`, `infrastructure/repositories/*.ts`, `domain/**`, `dto/*.dto.ts`.
+Archivos (`src/modules/doman/`): `doman.module.ts`, `presentation/{daily-plans,doman-sessions,study-plans,plan-assignments,doman-progress}.controller.ts`, `application/*.service.ts`, `application/{plan-date,word-card-selection,doman-authorization,default-category}.util.ts`, `infrastructure/repositories/*.ts`, `domain/**`, `dto/*.dto.ts`.
 
 ## 9. Configuración de entorno
 

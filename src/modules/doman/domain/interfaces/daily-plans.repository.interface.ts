@@ -39,5 +39,12 @@ export interface IDailyPlansRepository {
     id: string,
     patch: DailyPlanPatchPayload,
   ): Promise<DomanDailyPlan | null>;
+  /**
+   * Reemplaza el documento completo por el capturado antes de una
+   * regeneración destructiva. A diferencia de `update`, deja ausentes los
+   * campos opcionales que el plan original no tenía: un patch no puede
+   * borrarlos porque `undefined` significa "no tocar".
+   */
+  restore(plan: DomanDailyPlan): Promise<void>;
   delete(id: string): Promise<boolean>;
 }

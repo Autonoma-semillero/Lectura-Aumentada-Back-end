@@ -5,6 +5,7 @@ import {
   HttpException,
   Inject,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { randomBytes } from 'crypto';
@@ -15,9 +16,14 @@ import type { IWordCardsRepository } from '../../categories/domain/interfaces/wo
 import { GroupsService } from '../../groups/application/groups.service';
 import type { GroupsRequester } from '../../groups/domain/types/groups-requester.type';
 import {
+  DEFAULT_DAILY_PLAN_TARGET_CARDS,
+  DEFAULT_DAILY_PLAN_TARGET_SESSIONS,
+  DEFAULT_DOMAN_DISPLAY_MS,
+  MAX_DAILY_PLAN_TARGET_CARDS,
   MAX_DOMAN_BULK_AUDIENCE_SIZE,
   MAX_DOMAN_STUDY_PLAN_DAY_JOBS,
   MAX_DOMAN_STUDY_PLAN_DAY_SESSION_CARDS,
+  MIN_DAILY_PLAN_TARGET_CARDS,
 } from '../domain/constants/doman-limits.constants';
 import { STUDY_PLANS_REPOSITORY } from '../domain/constants/doman.tokens';
 import type {
@@ -45,6 +51,7 @@ import {
   planDateToUtcMidnight,
   todayPlanDateUtcMidnight,
 } from './plan-date.util';
+import { resolveStudyPlanCategoryCards } from './word-card-selection.util';
 
 type StudyPlanDayResult = {
   student_id: string;
@@ -68,6 +75,8 @@ type StudyPlanDayResponse = {
 
 @Injectable()
 export class StudyPlansService {
+  private readonly logger = new Logger(StudyPlansService.name);
+
   constructor(
     @Inject(STUDY_PLANS_REPOSITORY)
     private readonly studyPlansRepository: IStudyPlansRepository,
@@ -206,7 +215,8 @@ export class StudyPlansService {
       endDate,
       legacyExactStudentId,
     );
-    const sessionsPerDay = dto.sessions_per_day ?? 5;
+    const sessionsPerDay =
+      dto.sessions_per_day ?? DEFAULT_DAILY_PLAN_TARGET_SESSIONS;
     this.assertGenerationWorkload(
       audience.student_ids.length,
       sessionsPerDay,
@@ -220,7 +230,7 @@ export class StudyPlansService {
       status,
     );
 
-    return this.studyPlansRepository.create({
+    const created = await this.studyPlansRepository.create({
       name,
       description: dto.description?.trim(),
       groupIds,
@@ -229,13 +239,17 @@ export class StudyPlansService {
       startDate,
       endDate,
       sessionsPerDay,
-      displayMs: dto.display_ms ?? 2200,
+      displayMs: dto.display_ms ?? DEFAULT_DOMAN_DISPLAY_MS,
       audioMode: dto.audio_mode ?? 'manual',
       mode: dto.mode ?? 'auto',
       status,
       levels,
       createdBy: requester.userId,
     });
+    await this.assertWonOverlapRace(created, () =>
+      this.studyPlansRepository.delete(created.id),
+    );
+    return created;
   }
 
   async update(
@@ -313,6 +327,12 @@ export class StudyPlansService {
     if (!updated) {
       throw new NotFoundException('Study plan not found');
     }
+    // Un update puede activar el plan o mover sus fechas, así que abre la
+    // misma ventana de carrera que `create`. Si la pierde, se revierte al
+    // estado capturado antes de escribir.
+    await this.assertWonOverlapRace(updated, () =>
+      this.studyPlansRepository.restore(existing),
+    );
     return updated;
   }
 
@@ -465,7 +485,8 @@ export class StudyPlansService {
           }
           return {
             category_id: category.category_id,
-            target_cards_count: category.target_cards_count ?? 5,
+            target_cards_count:
+              category.target_cards_count ?? DEFAULT_DAILY_PLAN_TARGET_CARDS,
           };
         }),
       }))
@@ -502,11 +523,11 @@ export class StudyPlansService {
         if (category.target_cards_count !== undefined) {
           if (
             !Number.isInteger(category.target_cards_count) ||
-            category.target_cards_count < 1 ||
-            category.target_cards_count > 50
+            category.target_cards_count < MIN_DAILY_PLAN_TARGET_CARDS ||
+            category.target_cards_count > MAX_DAILY_PLAN_TARGET_CARDS
           ) {
             throw new BadRequestException(
-              'target_cards_count must be an integer between 1 and 50',
+              `target_cards_count must be an integer between ${MIN_DAILY_PLAN_TARGET_CARDS} and ${MAX_DAILY_PLAN_TARGET_CARDS}`,
             );
           }
           continue;
@@ -572,7 +593,9 @@ export class StudyPlansService {
       const cardsPerStudent = level.categories.reduce(
         (total, category) =>
           total +
-          (category.target_cards_count ?? category.word_card_ids?.length ?? 5),
+          (category.target_cards_count ??
+            category.word_card_ids?.length ??
+            DEFAULT_DAILY_PLAN_TARGET_CARDS),
         0,
       );
       const estimatedSessionCards =
@@ -585,6 +608,57 @@ export class StudyPlansService {
         );
       }
     }
+  }
+
+  /**
+   * Cierra la carrera de `assertNoActiveOverlap`, que es un check-then-act.
+   *
+   * La invariante ("ningún estudiante con dos planes activos cuyos rangos
+   * solapan") es una condición de rango, no de igualdad: no existe índice
+   * único de Mongo que la sostenga. Por eso se revalida DESPUÉS de escribir y
+   * se desempata por `_id`: `findOverlappingActive` devuelve el plan más
+   * antiguo, así que solo sobrevive el de `_id` más bajo y los demás ceden.
+   * Con N solicitudes concurrentes ceden exactamente N-1.
+   *
+   * `compensate` deshace la escritura de quien cede: borrar el plan recién
+   * creado, o revertir el update al estado previo.
+   */
+  private async assertWonOverlapRace(
+    plan: DomanStudyPlan,
+    compensate: () => Promise<unknown>,
+  ): Promise<void> {
+    if (plan.status !== 'active') {
+      return;
+    }
+    const earliestOverlap =
+      await this.studyPlansRepository.findOverlappingActive(
+        plan.student_ids,
+        plan.start_date,
+        plan.end_date,
+        plan.id,
+      );
+    // Los hex de ObjectId son minúsculas y de largo fijo, así que el orden
+    // lexicográfico coincide con el orden de bytes.
+    if (!earliestOverlap || earliestOverlap.id >= plan.id) {
+      return;
+    }
+    try {
+      await compensate();
+    } catch (compensationError) {
+      // El conflicto es la respuesta correcta para el cliente aunque la
+      // compensación falle: dejar escapar este error devolvería un 500 en vez
+      // del 409 y ocultaría que quedó un plan activo duplicado en la base.
+      this.logger.error(
+        `Failed to compensate study plan ${plan.id} after losing the overlap race ` +
+          `against ${earliestOverlap.id}; a duplicate active study plan may remain`,
+        compensationError instanceof Error
+          ? compensationError.stack
+          : undefined,
+      );
+    }
+    throw new ConflictException(
+      'At least one student already has an active study plan in this date range',
+    );
   }
 
   private async assertNoActiveOverlap(
@@ -630,39 +704,20 @@ export class StudyPlansService {
     );
   }
 
-  private async resolveConfiguredCards(
+  /**
+   * Usa la misma selección canónica que la generación real, para que la
+   * previsualización no prometa un set de tarjetas distinto del que el
+   * estudiante va a ver.
+   */
+  private resolveConfiguredCards(
     category: DomanStudyPlanCategory,
     studentId: string,
   ): Promise<WordCardListed[]> {
-    if (category.word_card_ids !== undefined) {
-      const cards = await this.wordCardsRepository.findByIds(
-        category.word_card_ids,
-      );
-      return cards.filter(
-        (card) =>
-          isSameObjectId(card.student_id, studentId) &&
-          isSameObjectId(card.category_id ?? '', category.category_id) &&
-          card.status !== 'archived',
-      );
-    }
-    const limit = category.target_cards_count ?? 5;
-    const primary =
-      await this.wordCardsRepository.listByStudentCategoryAndStatuses(
-        studentId,
-        category.category_id,
-        ['new', 'active'],
-      );
-    let candidates = primary;
-    if (candidates.length < limit) {
-      const completed =
-        await this.wordCardsRepository.listByStudentCategoryAndStatuses(
-          studentId,
-          category.category_id,
-          ['completed'],
-        );
-      candidates = candidates.concat(completed);
-    }
-    return candidates.slice(0, limit);
+    return resolveStudyPlanCategoryCards(
+      this.wordCardsRepository,
+      category,
+      studentId,
+    );
   }
 
   private toPublicError(error: unknown): string {

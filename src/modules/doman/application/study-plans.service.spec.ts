@@ -33,6 +33,8 @@ describe('StudyPlansService', () => {
     findOverlappingActive: jest.fn(),
     create: jest.fn(),
     update: jest.fn(),
+    delete: jest.fn(),
+    restore: jest.fn(),
   };
   const wordCardsRepository = {
     findByIds: jest.fn(),
@@ -450,6 +452,172 @@ describe('StudyPlansService', () => {
     expect(
       wordCardsRepository.listByStudentCategoryAndStatuses,
     ).toHaveBeenCalledWith(studentId, categoryId, ['new', 'active']);
+  });
+
+  describe('carrera de solapamiento al crear', () => {
+    const requester = { userId: '507f1f77bcf86cd799439001', role: 'teacher' as const };
+
+    /** Hace que `create` devuelva un plan con el `_id` indicado. */
+    function createWithId(id: string): void {
+      studyPlansRepository.create.mockImplementation(async (payload) => ({
+        ...buildPlan(),
+        id,
+        status: 'active' as const,
+        student_ids: payload.students.map(
+          (student: { student_id: string }) => student.student_id,
+        ),
+      }));
+    }
+
+    it('conserva el plan cuando gana la carrera y no consulta borrado', async () => {
+      createWithId('507f1f77bcf86cd799439100');
+      // El pre-check pasa, pero después de insertar aparece un plan MÁS NUEVO.
+      studyPlansRepository.findOverlappingActive
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce({
+          ...buildPlan(),
+          id: '507f1f77bcf86cd799439999',
+        });
+
+      await expect(
+        service.create(buildCreateDto(), requester),
+      ).resolves.toMatchObject({ id: '507f1f77bcf86cd799439100' });
+      expect(studyPlansRepository.delete).not.toHaveBeenCalled();
+    });
+
+    it('cede y borra su propio plan cuando otro más antiguo ganó la carrera', async () => {
+      createWithId('507f1f77bcf86cd799439999');
+      studyPlansRepository.findOverlappingActive
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce({
+          ...buildPlan(),
+          id: '507f1f77bcf86cd799439100',
+        });
+
+      await expect(
+        service.create(buildCreateDto(), requester),
+      ).rejects.toBeInstanceOf(ConflictException);
+      expect(studyPlansRepository.delete).toHaveBeenCalledWith(
+        '507f1f77bcf86cd799439999',
+      );
+    });
+
+    it('con tres creaciones concurrentes sobrevive exactamente una', async () => {
+      const ids = [
+        '507f1f77bcf86cd799439100',
+        '507f1f77bcf86cd799439200',
+        '507f1f77bcf86cd799439300',
+      ];
+      // `findOverlappingActive` devuelve el más antiguo de LOS OTROS, que es
+      // exactamente el contrato que el desempate necesita.
+      const survivors: string[] = [];
+      for (const id of ids) {
+        jest.clearAllMocks();
+        createWithId(id);
+        const earliestOther = ids.filter((other) => other !== id).sort()[0];
+        studyPlansRepository.findOverlappingActive
+          .mockResolvedValueOnce(null)
+          .mockResolvedValueOnce({ ...buildPlan(), id: earliestOther });
+
+        await service
+          .create(buildCreateDto(), requester)
+          .then(() => survivors.push(id))
+          .catch(() => undefined);
+      }
+
+      expect(survivors).toEqual([ids[0]]);
+    });
+
+    it('revierte el update al estado previo cuando pierde la carrera', async () => {
+      const original = {
+        ...buildPlan(),
+        id: '507f1f77bcf86cd799439999',
+        status: 'draft' as const,
+        created_by: requester.userId,
+      };
+      studyPlansRepository.findById.mockResolvedValue(original);
+      studyPlansRepository.update.mockResolvedValue({
+        ...original,
+        status: 'active' as const,
+      });
+      studyPlansRepository.findOverlappingActive
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce({
+          ...buildPlan(),
+          id: '507f1f77bcf86cd799439100',
+        });
+
+      await expect(
+        service.update(original.id, { status: 'active' }, requester),
+      ).rejects.toBeInstanceOf(ConflictException);
+
+      // Se revierte con el documento capturado ANTES de escribir, no con un
+      // patch: así los opcionales que el update agregó quedan borrados.
+      expect(studyPlansRepository.restore).toHaveBeenCalledWith(original);
+      expect(studyPlansRepository.delete).not.toHaveBeenCalled();
+    });
+
+    it('conserva el update cuando gana la carrera', async () => {
+      const original = {
+        ...buildPlan(),
+        id: '507f1f77bcf86cd799439100',
+        status: 'draft' as const,
+        created_by: requester.userId,
+      };
+      studyPlansRepository.findById.mockResolvedValue(original);
+      studyPlansRepository.update.mockResolvedValue({
+        ...original,
+        status: 'active' as const,
+      });
+      studyPlansRepository.findOverlappingActive
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce({
+          ...buildPlan(),
+          id: '507f1f77bcf86cd799439999',
+        });
+
+      await expect(
+        service.update(original.id, { status: 'active' }, requester),
+      ).resolves.toMatchObject({ status: 'active' });
+      expect(studyPlansRepository.restore).not.toHaveBeenCalled();
+    });
+
+    it('sigue devolviendo Conflict aunque falle la compensación al ceder', async () => {
+      createWithId('507f1f77bcf86cd799439999');
+      studyPlansRepository.findOverlappingActive
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce({
+          ...buildPlan(),
+          id: '507f1f77bcf86cd799439100',
+        });
+      studyPlansRepository.delete.mockRejectedValue(
+        new Error('delete timed out'),
+      );
+
+      // El cliente debe ver el 409 que corresponde, no un 500 filtrado por la
+      // compensación.
+      await expect(
+        service.create(buildCreateDto(), requester),
+      ).rejects.toBeInstanceOf(ConflictException);
+    });
+
+    it('no revalida la carrera para un plan que no nace activo', async () => {
+      createWithId('507f1f77bcf86cd799439100');
+      studyPlansRepository.create.mockImplementation(async () => ({
+        ...buildPlan(),
+        id: '507f1f77bcf86cd799439100',
+        status: 'draft' as const,
+      }));
+
+      await service.create(
+        { ...buildCreateDto(), status: 'draft' as const },
+        requester,
+      );
+
+      // Solo la llamada del pre-check, ninguna revalidación posterior.
+      expect(studyPlansRepository.findOverlappingActive).not.toHaveBeenCalled();
+      expect(studyPlansRepository.delete).not.toHaveBeenCalled();
+    });
   });
 
   function buildCreateDto() {
