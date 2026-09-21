@@ -14,6 +14,7 @@ import { DocenteModule } from './modules/docente/docente.module';
 import { DomanModule } from './modules/doman/doman.module';
 import { GroupsModule } from './modules/groups/groups.module';
 import { LearningUnitsModule } from './modules/learning-units/learning-units.module';
+import { MarkersModule } from './modules/markers/markers.module';
 import { ProgressModule } from './modules/progress/progress.module';
 import { SeedingModule } from './modules/seeding/seeding.module';
 import { UsersModule } from './modules/users/users.module';
@@ -34,6 +35,7 @@ import { UsersModule } from './modules/users/users.module';
     ProgressModule,
     AssetsModule,
     CategoriesModule,
+    MarkersModule,
     GroupsModule,
     DomanModule,
     DocenteModule,
