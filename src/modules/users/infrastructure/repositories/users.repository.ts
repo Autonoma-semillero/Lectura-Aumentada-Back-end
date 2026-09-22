@@ -123,15 +123,28 @@ export class UsersRepository implements IUsersRepository {
     const now = new Date();
     const doc: Document = {
       email: payload.email?.trim().toLowerCase(),
-      username: payload.username?.trim().toLowerCase(),
-      display_name: payload.display_name,
       roles: payload.roles ?? ['student'],
       status: payload.status ?? 'active',
-      password_hash: payload.password_hash,
-      metadata: payload.metadata,
       created_at: now,
       updated_at: now,
     };
+
+    // The MongoDB driver serializes explicit `undefined` values as `null`.
+    // Omit optional properties instead, because the collection validator only
+    // accepts their declared BSON types when the fields are present.
+    if (payload.username !== undefined) {
+      doc.username = payload.username.trim().toLowerCase();
+    }
+    if (payload.display_name !== undefined) {
+      doc.display_name = payload.display_name;
+    }
+    if (payload.password_hash !== undefined) {
+      doc.password_hash = payload.password_hash;
+    }
+    if (payload.metadata !== undefined) {
+      doc.metadata = payload.metadata;
+    }
+
     const result = await this.coll().insertOne(doc);
     const inserted = await this.coll().findOne({ _id: result.insertedId });
     if (!inserted) {
