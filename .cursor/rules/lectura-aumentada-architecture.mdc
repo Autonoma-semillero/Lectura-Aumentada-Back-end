@@ -37,5 +37,6 @@ Antes de editar `src/**/*.ts`, lee `AGENTS.md` en la raíz del repositorio.
 ## MongoDB
 
 - Esquema canónico: `db/mongo/lectura_aumentada_full_schema.mongosh.js`. Mongoose en `src/modules/*/infrastructure/schemas` debe coincidir con ese contrato.
-- No hay colección `assets`; activos AR van en `learning_units.assets`.
+- No hay colección `assets`; los activos AR de una unidad van en `learning_units.assets`.
+- Existe la colección `markers` (catálogo de marcadores administrable, con su propio `model_3d_url`). Es un módulo hoja y no toca `learning_units`: un código de marcador pertenece a `markers` o a `learning_units.marker_id`, nunca a las dos. Ver `docs/origen/Arquitectura/db/US-BE-markers.md`.
 - **Temática = `categories`**. Tarjetas Doman enlazan con `doman_word_cards.category_id` (sin colección puente `theme_card_links`).

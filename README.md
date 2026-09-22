@@ -37,7 +37,7 @@ Flujo general:
 
 Las historias **US-BE-F1-*** deben cumplirse respetando los puntos anteriores. Las **US-F1-*** (p. ej. EPIC-2) describen valor de negocio / UX u otros alcances; no sustituyen el contrato de esquema anterior salvo que explícitamente lo indiquen y se actualicen ADR + script.
 
-**Implementación en código:** módulo [`src/modules/categories/`](./src/modules/categories/) (CRUD `/api/categories`, reorder, listado y asociación de tarjetas vía `category_id`; ver §8.6). **Cambios de esquema** (validador, índices): PR que actualice el script canónico y deje evidencia en `docs/origen/Arquitectura/db/` (p. ej. [`US-BE-F1-01-categories.md`](./docs/origen/Arquitectura/db/US-BE-F1-01-categories.md)).
+**Implementación en código:** módulo [`src/modules/categories/`](./src/modules/categories/) (CRUD `/api/categories`, reorder, listado y asociación de tarjetas vía `category_id`; ver §8.7). **Cambios de esquema** (validador, índices): PR que actualice el script canónico y deje evidencia en `docs/origen/Arquitectura/db/` (p. ej. [`US-BE-F1-01-categories.md`](./docs/origen/Arquitectura/db/US-BE-F1-01-categories.md)).
 
 ## 3. Stack tecnológico
 
@@ -148,6 +148,7 @@ Los **schemas Mongoose** en `src/modules/*/infrastructure/schemas/` deben manten
 | `users` | Cuenta: `email`, `display_name`, `roles[]`, `status`, `password_hash`, `metadata`, timestamps. |
 | `categories` | **Temática** en el modelo del repo: `name`, `slug` (único global, `ux_categories_slug`), `parent_id`, `sort_order`, timestamps; índice `ix_categories_parent_sort` para listados por padre + orden. |
 | `learning_units` | Unidad AR: `word`, `marker_id`, `category_id?`, `assets.model_3d`, `assets.audio_pronunciacion`, `metadata_accessibility`, `language`, timestamps. **No hay colección `assets`.** |
+| `markers` | Catálogo de marcadores AR: `code` (único, `ux_markers_code`), `name`, `description?`, `model_3d_url?`, `model_3d_format?`, `model_3d_updated_at?`, `status`, `created_by`, timestamps. Independiente de `learning_units`: un código pertenece a una colección o a la otra, nunca a las dos. Ver [`US-BE-markers.md`](./docs/origen/Arquitectura/db/US-BE-markers.md). |
 | `sessions` | Sesión de producto / experiencia AR (`session_type`, `started_at`, `status`, etc.). **No** es la tabla de refresh JWT; auth real debe definir su propia persistencia. |
 | `progress_logs` | Eventos: `user_id`, `action`, `ts`, `payload`, `learning_unit_id?`, `session_id?`, `device`, `created_at`. |
 
@@ -157,6 +158,7 @@ Relaciones conceptuales:
 - un `progress_log` puede referenciar `learning_unit_id` y `session_id`;
 - `learning_units` puede enlazar a `categories` por `category_id`;
 - `sessions` enlaza `user_id` y opcionalmente `learning_unit_id` / `marker_id`.
+- `markers` es el catálogo de marcadores administrable; `GET /api/assets/marker/:markerId` sigue resolviendo contra `learning_units` y no cambia.
 - **Tarjeta Doman ↔ temática:** `doman_word_cards.category_id` referencia `categories` (sin colección puente). Lo mismo aplica donde el canónico usa `category_id` en planes/sesiones Doman.
 
 ### 7.2 Fase 1 Doman (aditiva)
@@ -169,7 +171,7 @@ Relaciones conceptuales:
 | `doman_session_cards` |
 | `doman_exposure_logs` |
 
-Referencias de diseño citadas en el script: `docs/arquitectura/DB/Db_1.png`, `docs/agentic/db-fase1-doman.md`. Planes y sesiones Doman con **`category_id`** persistido: módulo **`src/modules/doman/`** (ver §8.7). Tarjetas y temáticas: **`src/modules/categories/`** (`doman_word_cards.category_id` → `categories`).
+Referencias de diseño citadas en el script: `docs/arquitectura/DB/Db_1.png`, `docs/agentic/db-fase1-doman.md`. Planes y sesiones Doman con **`category_id`** persistido: módulo **`src/modules/doman/`** (ver §8.8). Tarjetas y temáticas: **`src/modules/categories/`** (`doman_word_cards.category_id` → `categories`).
 
 ### 7.3 Activos binarios
 
@@ -253,7 +255,39 @@ Archivos relevantes (`src/modules/assets/`):
 - `infrastructure/schemas/asset.schema.ts` (subdocumento embebido `assets`, referencia)
 - `dto/*.dto.ts`
 
-### 8.6 Categories (temáticas)
+### 8.6 Markers (catálogo de marcadores AR)
+
+Catálogo administrable de marcadores. Un marcador se crea con su `code` (el identificador que emite el motor AR) y su `name`, y se le asocia un **modelo 3D por URL**: el binario no se sube ni se guarda en Mongo, vive en CDN o servidor de archivos (§7.3). Evidencia de esquema: [`docs/origen/Arquitectura/db/US-BE-markers.md`](./docs/origen/Arquitectura/db/US-BE-markers.md).
+
+| Método | Ruta | Roles |
+|--------|------|-------|
+| `POST` | `/api/markers` | teacher, admin |
+| `GET` | `/api/markers` | autenticado |
+| `GET` | `/api/markers/code/:code` | autenticado |
+| `GET` | `/api/markers/:id` | autenticado |
+| `PATCH` | `/api/markers/:id` | teacher, admin |
+| `PUT` | `/api/markers/:id/model` | teacher, admin |
+| `DELETE` | `/api/markers/:id/model` | teacher, admin |
+| `DELETE` | `/api/markers/:id` | teacher, admin |
+
+- `code` se normaliza (sin tildes, minúsculas, espacios a guiones) y es **inmutable**; único por `ux_markers_code`.
+- `POST` devuelve `409` si el código ya existe en `markers` **o** si ya está en uso como `learning_units.marker_id`: un código pertenece a una colección o a la otra, nunca a las dos.
+- `DELETE /api/markers/:id` **archiva** (`status: 'archived'`), no borra.
+- **El módulo no lee ni escribe `learning_units`** (salvo esa comprobación de solo lectura) y **`GET /api/assets/marker/:markerId` no cambia**. Un marcador creado aquí no es resoluble por ese endpoint mientras no exista una unidad con el mismo código; integrarlo es trabajo posterior.
+
+Archivos relevantes (`src/modules/markers/`):
+
+- `presentation/markers.controller.ts`
+- `application/markers.service.ts`
+- `domain/constants/markers.tokens.ts`
+- `domain/interfaces/marker.interface.ts`
+- `domain/interfaces/markers.repository.interface.ts`
+- `domain/types/marker-code-normalization.ts`
+- `infrastructure/repositories/markers.repository.ts`
+- `infrastructure/schemas/marker.schema.ts`
+- `dto/*.dto.ts`
+
+### 8.7 Categories (temáticas)
 
 En este repositorio **temática = `categories`** (véase README §2.1). CRUD bajo `/api/categories` (incluye `POST /api/categories/reorder` por `sort_order` entre hermanos). Slug único a nivel de colección (índice `ux_categories_slug`). Evidencia de esquema: [`docs/origen/Arquitectura/db/US-BE-F1-01-categories.md`](./docs/origen/Arquitectura/db/US-BE-F1-01-categories.md). Asociación tarjeta–temática (`category_id`): [`docs/origen/Arquitectura/db/US-BE-F1-02-doman-word-cards-category.md`](./docs/origen/Arquitectura/db/US-BE-F1-02-doman-word-cards-category.md). Tarjetas palabra + audio (`doman_word_cards`): [`docs/origen/Arquitectura/db/US-BE-F1-03-doman-word-cards.md`](./docs/origen/Arquitectura/db/US-BE-F1-03-doman-word-cards.md).
 
@@ -277,7 +311,7 @@ Archivos relevantes (`src/modules/categories/`):
 - `infrastructure/schemas/category.schema.ts`
 - `dto/*.dto.ts`
 
-### 8.7 Doman — planes, sesiones y progreso
+### 8.8 Doman — planes, sesiones y progreso
 
 El módulo `src/modules/doman/` expone **cinco** controladores, todos bajo el prefijo `/api/doman/`. Maneja dos conceptos distintos de "plan":
 

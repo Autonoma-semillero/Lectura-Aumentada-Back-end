@@ -139,6 +139,26 @@ ensureCollection('learning_units', {
   },
 });
 
+ensureCollection('markers', {
+  $jsonSchema: {
+    bsonType: 'object',
+    required: ['code', 'name', 'status', 'created_by', 'created_at', 'updated_at'],
+    additionalProperties: true,
+    properties: {
+      code: { bsonType: 'string', minLength: 1, maxLength: 128 },
+      name: { bsonType: 'string', minLength: 1, maxLength: 120 },
+      description: { bsonType: 'string', maxLength: 500 },
+      model_3d_url: { bsonType: 'string', minLength: 1, maxLength: 2048 },
+      model_3d_format: { enum: ['glb', 'gltf'] },
+      model_3d_updated_at: { bsonType: 'date' },
+      status: { enum: ['active', 'archived'] },
+      created_by: { bsonType: 'objectId' },
+      created_at: { bsonType: 'date' },
+      updated_at: { bsonType: 'date' },
+    },
+  },
+});
+
 ensureCollection('sessions', {
   $jsonSchema: {
     bsonType: 'object',
@@ -234,6 +254,13 @@ db.learning_units.createIndex(
   { name: 'ix_learning_units_category' },
 );
 db.learning_units.createIndex({ word: 1 }, { name: 'ix_learning_units_word' });
+
+db.markers.createIndex({ code: 1 }, { unique: true, name: 'ux_markers_code' });
+db.markers.createIndex({ status: 1, code: 1 }, { name: 'ix_markers_status_code' });
+db.markers.createIndex(
+  { created_by: 1, updated_at: -1 },
+  { name: 'ix_markers_creator_updated' },
+);
 
 db.sessions.createIndex(
   { user_id: 1, started_at: -1 },
@@ -768,6 +795,6 @@ db.doman_exposure_logs.createIndex(
 );
 
 print(
-  'lectura_aumentada_full_schema: 14 colecciones (7 núcleo + 7 doman) e índices aplicados.',
+  'lectura_aumentada_full_schema: 15 colecciones (8 núcleo + 7 doman) e índices aplicados.',
 );
 print(`reference_time=${now.toISOString()}`);
