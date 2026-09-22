@@ -56,6 +56,7 @@ describe('DailyPlansService', () => {
   const wordCardsRepository = {
     countWordCardsByCategoryForStudent: jest.fn(),
     findByIds: jest.fn(),
+    listByStudentAndCategory: jest.fn(),
     listByStudentCategoryAndStatuses: jest.fn(),
   };
   const categoriesService = {
@@ -703,6 +704,57 @@ describe('DailyPlansService', () => {
     ).resolves.toMatchObject({ plan: { id: planId } });
   });
 
+  it('rechaza la generación cuando ninguna palabra pineada resuelve a una tarjeta del estudiante', async () => {
+    const studyPlan = buildStudyPlan([studentId], {
+      category_id: categoryId,
+      word_card_words: ['inexistente'],
+    });
+    studyPlansRepository.findActiveForStudentAndDate.mockResolvedValue(
+      studyPlan,
+    );
+    categoriesService.findById.mockResolvedValue({ id: categoryId });
+    dailyPlansRepository.findByStudentAndPlanDate.mockResolvedValue(null);
+    wordCardsRepository.listByStudentAndCategory.mockResolvedValue(
+      buildCards(studentId),
+    );
+
+    await expect(
+      service.generate(
+        { student_id: studentId, category_id: categoryId },
+        teacherRequester,
+      ),
+    ).rejects.toThrow('No available word cards to generate the daily plan');
+    expect(dailyPlansRepository.create).not.toHaveBeenCalled();
+  });
+
+  it('genera con el subconjunto resuelto cuando solo algunas palabras pineadas coinciden', async () => {
+    const studyPlan = buildStudyPlan([studentId], {
+      category_id: categoryId,
+      word_card_words: ['gato', 'inexistente'],
+    });
+    studyPlansRepository.findActiveForStudentAndDate.mockResolvedValue(
+      studyPlan,
+    );
+    categoriesService.findById.mockResolvedValue({ id: categoryId });
+    dailyPlansRepository.findByStudentAndPlanDate.mockResolvedValue(null);
+    wordCardsRepository.listByStudentAndCategory.mockResolvedValue(
+      buildCards(studentId),
+    );
+    dailyPlansRepository.create.mockResolvedValue(buildPlan(studentId));
+    sessionsRepository.create.mockResolvedValue(buildSession(studentId));
+    sessionCardsRepository.createMany.mockResolvedValue(undefined);
+
+    await expect(
+      service.generate(
+        { student_id: studentId, category_id: categoryId },
+        teacherRequester,
+      ),
+    ).resolves.toMatchObject({ plan: { id: planId } });
+    expect(dailyPlansRepository.create).toHaveBeenCalledWith(
+      expect.objectContaining({ targetCardsCount: 1 }),
+    );
+  });
+
   function buildPlan(targetStudentId: string, selectedCategoryId = categoryId) {
     return {
       id: planId,
@@ -756,7 +808,8 @@ describe('DailyPlansService', () => {
     studentIds: string[],
     category:
       | { category_id: string; target_cards_count: number }
-      | { category_id: string; word_card_ids: string[] },
+      | { category_id: string; word_card_ids: string[] }
+      | { category_id: string; word_card_words: string[] },
     schemaVersion = 2,
   ) {
     return {

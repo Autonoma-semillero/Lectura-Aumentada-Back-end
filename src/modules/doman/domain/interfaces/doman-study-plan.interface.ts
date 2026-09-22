@@ -16,6 +16,8 @@ export interface DomanStudyPlanCategory {
   target_cards_count?: number;
   /** Legacy exact selection kept for dual-read compatibility. */
   word_card_ids?: string[];
+  /** Explicit word list resolved per student at every generation. */
+  word_card_words?: string[];
 }
 
 export type DomanStudyPlanAudienceSource =

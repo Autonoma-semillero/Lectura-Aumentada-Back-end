@@ -10,6 +10,7 @@ import { GroupsService } from '../../groups/application/groups.service';
 import { STUDY_PLANS_REPOSITORY } from '../domain/constants/doman.tokens';
 import { DailyPlansService } from './daily-plans.service';
 import { StudyPlansService } from './study-plans.service';
+import { resolveStudyPlanCategoryCards } from './word-card-selection.util';
 
 describe('StudyPlansService', () => {
   const studentId = '507f1f77bcf86cd799439011';
@@ -39,6 +40,7 @@ describe('StudyPlansService', () => {
   const wordCardsRepository = {
     findByIds: jest.fn(),
     listByStudentCategoryAndStatuses: jest.fn(),
+    listByStudentAndCategory: jest.fn(),
   };
   const categoriesService = {
     findById: jest.fn(),
@@ -73,6 +75,7 @@ describe('StudyPlansService', () => {
       buildCard(cardId, studentId, categoryId),
     ]);
     wordCardsRepository.listByStudentCategoryAndStatuses.mockResolvedValue([]);
+    wordCardsRepository.listByStudentAndCategory.mockResolvedValue([]);
     studyPlansRepository.create.mockImplementation(async (payload) => ({
       ...buildPlan(),
       name: payload.name,
@@ -263,7 +266,60 @@ describe('StudyPlansService', () => {
     } as never;
 
     await expect(service.create(dto, requester)).rejects.toThrow(
-      'cannot define both',
+      'cannot define more than one',
+    );
+    expect(studyPlansRepository.create).not.toHaveBeenCalled();
+  });
+
+  it('crea un plan v2 con una categoría en modo explícito por palabra', async () => {
+    const dto = buildCreateDto();
+    dto.levels[0].categories[0] = {
+      category_id: categoryId,
+      word_card_words: ['Gato', 'Perro'],
+    } as never;
+
+    await service.create(dto, requester);
+
+    expect(studyPlansRepository.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        levels: [
+          expect.objectContaining({
+            categories: [
+              {
+                category_id: categoryId,
+                word_card_words: ['gato', 'perro'],
+              },
+            ],
+          }),
+        ],
+      }),
+    );
+  });
+
+  it('rechaza target_cards_count y word_card_words simultáneos', async () => {
+    const dto = buildCreateDto();
+    dto.levels[0].categories[0] = {
+      category_id: categoryId,
+      target_cards_count: 3,
+      word_card_words: ['gato'],
+    } as never;
+
+    await expect(service.create(dto, requester)).rejects.toThrow(
+      'cannot define more than one',
+    );
+    expect(studyPlansRepository.create).not.toHaveBeenCalled();
+  });
+
+  it('rechaza word_card_ids y word_card_words simultáneos', async () => {
+    const dto = buildLegacyCreateDto();
+    dto.levels[0].categories[0] = {
+      category_id: categoryId,
+      word_card_ids: [cardId],
+      word_card_words: ['gato'],
+    } as never;
+
+    await expect(service.create(dto, requester)).rejects.toThrow(
+      'cannot define more than one',
     );
     expect(studyPlansRepository.create).not.toHaveBeenCalled();
   });
@@ -287,6 +343,35 @@ describe('StudyPlansService', () => {
 
     expect(studyPlansRepository.findAll).toHaveBeenCalledWith(
       expect.objectContaining({ createdBy: undefined }),
+    );
+  });
+
+  it('permite a un estudiante listar únicamente sus propios planes, ignorando student_id del query', async () => {
+    studyPlansRepository.findAll.mockResolvedValue([]);
+    const studentRequester = { userId: studentId, role: 'student' as const };
+
+    await service.list({ student_id: otherStudentId }, studentRequester);
+
+    expect(studyPlansRepository.findAll).toHaveBeenCalledWith({
+      studentId,
+      status: undefined,
+      createdBy: undefined,
+    });
+  });
+
+  it('no permite que un estudiante reciba planes de otro estudiante desde list()', async () => {
+    const ownPlan = { ...buildPlan(), student_ids: [studentId] };
+    studyPlansRepository.findAll.mockResolvedValue([ownPlan]);
+    const studentRequester = { userId: studentId, role: 'student' as const };
+
+    const result = await service.list(
+      { student_id: otherStudentId },
+      studentRequester,
+    );
+
+    expect(result).toEqual([ownPlan]);
+    expect(studyPlansRepository.findAll).toHaveBeenCalledWith(
+      expect.objectContaining({ studentId }),
     );
   });
 
@@ -620,6 +705,133 @@ describe('StudyPlansService', () => {
     });
   });
 
+  describe('previewCategoryCards', () => {
+    const otherStudentId2 = '507f1f77bcf86cd799439081';
+
+    it('rechaza la previsualización cuando el requester es un estudiante', async () => {
+      await expect(
+        service.previewCategoryCards(
+          {
+            category_id: categoryId,
+            word_card_words: ['gato'],
+            student_ids: [studentId],
+          },
+          { userId: studentId, role: 'student' },
+        ),
+      ).rejects.toThrow(ForbiddenException);
+    });
+
+    it('rechaza cuando se definen target_cards_count y word_card_words a la vez', async () => {
+      await expect(
+        service.previewCategoryCards(
+          {
+            category_id: categoryId,
+            target_cards_count: 4,
+            word_card_words: ['gato'],
+            student_ids: [studentId],
+          },
+          requester,
+        ),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('devuelve, por estudiante, las tarjetas resueltas y las palabras sin resolver', async () => {
+      wordCardsRepository.listByStudentAndCategory.mockImplementation(
+        async (targetStudentId: string) => {
+          if (targetStudentId === studentId) {
+            return [buildCard(cardId, studentId, categoryId, 'gato')];
+          }
+          return [];
+        },
+      );
+
+      const result = await service.previewCategoryCards(
+        {
+          category_id: categoryId,
+          word_card_words: ['gato', 'perro'],
+          student_ids: [studentId, otherStudentId2],
+        },
+        requester,
+      );
+
+      expect(result).toEqual({
+        students: [
+          {
+            student_id: studentId,
+            cards: [
+              { id: cardId, word: 'gato', status: 'active' },
+            ],
+            unresolved_words: ['perro'],
+          },
+          {
+            student_id: otherStudentId2,
+            cards: [],
+            unresolved_words: ['gato', 'perro'],
+          },
+        ],
+      });
+    });
+
+    it('previsualiza en modo target_cards_count sin unresolved_words', async () => {
+      wordCardsRepository.listByStudentCategoryAndStatuses.mockImplementation(
+        async (_studentId: string, _categoryId: string, statuses: string[]) =>
+          statuses.includes('new')
+            ? [buildCard(cardId, studentId, categoryId, 'gato')]
+            : [],
+      );
+
+      const result = await service.previewCategoryCards(
+        {
+          category_id: categoryId,
+          target_cards_count: 4,
+          student_ids: [studentId],
+        },
+        requester,
+      );
+
+      expect(result).toEqual({
+        students: [
+          {
+            student_id: studentId,
+            cards: [{ id: cardId, word: 'gato', status: 'active' }],
+            unresolved_words: [],
+          },
+        ],
+      });
+    });
+
+    it('anti-drift: la previsualización usa el mismo despachador que la generación real', async () => {
+      const studentCards = [
+        buildCard(cardId, studentId, categoryId, 'gato'),
+        buildCard('507f1f77bcf86cd799439033', studentId, categoryId, 'perro'),
+      ];
+      wordCardsRepository.listByStudentAndCategory.mockResolvedValue(
+        studentCards,
+      );
+
+      const previewDto = {
+        category_id: categoryId,
+        word_card_words: ['gato', 'perro'],
+        student_ids: [studentId],
+      };
+
+      const previewResult = await service.previewCategoryCards(
+        previewDto,
+        requester,
+      );
+
+      const generationCards = await resolveStudyPlanCategoryCards(
+        wordCardsRepository as never,
+        { category_id: categoryId, word_card_words: ['gato', 'perro'] },
+        studentId,
+      );
+
+      expect(previewResult.students[0].cards.map((card) => card.id)).toEqual(
+        generationCards.map((card) => card.id),
+      );
+    });
+  });
+
   function buildCreateDto() {
     return {
       name: ' Plan trimestral ',
@@ -711,13 +923,14 @@ describe('StudyPlansService', () => {
     id: string,
     targetStudentId: string,
     targetCategoryId: string,
+    word = 'gato',
   ) {
     return {
       id,
       student_id: targetStudentId,
       category_id: targetCategoryId,
-      word: 'gato',
-      initial_letter: 'G',
+      word,
+      initial_letter: word.charAt(0).toUpperCase(),
       status: 'active' as const,
       times_shown: 0,
       created_at: new Date(),
