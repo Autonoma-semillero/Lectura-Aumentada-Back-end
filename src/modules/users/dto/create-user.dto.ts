@@ -39,7 +39,7 @@ export class CreateUserDto {
 
   @ApiProperty({
     format: 'password',
-    description: 'Contraseña que el backend almacena como hash Argon2.',
+    description: 'Contraseña que el backend almacena como hash seguro.',
   })
   @IsString()
   @IsNotEmpty()
