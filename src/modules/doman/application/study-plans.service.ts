@@ -40,6 +40,7 @@ import {
 import { GenerateStudyPlanDayDto } from '../dto/generate-study-plan-day.dto';
 import { GetActiveStudyPlanQueryDto } from '../dto/get-active-study-plan-query.dto';
 import { ListStudyPlansQueryDto } from '../dto/list-study-plans-query.dto';
+import { PreviewCategoryCardsDto } from '../dto/preview-category-cards.dto';
 import { UpdateStudyPlanDto } from '../dto/update-study-plan.dto';
 import {
   assertCanAccessStudent,
@@ -51,7 +52,10 @@ import {
   planDateToUtcMidnight,
   todayPlanDateUtcMidnight,
 } from './plan-date.util';
-import { resolveStudyPlanCategoryCards } from './word-card-selection.util';
+import {
+  normalizeDomanWord,
+  resolveStudyPlanCategoryCards,
+} from './word-card-selection.util';
 
 type StudyPlanDayResult = {
   student_id: string;
@@ -91,6 +95,17 @@ export class StudyPlansService {
     query: ListStudyPlansQueryDto,
     requester: DomanRequester,
   ): Promise<DomanStudyPlan[]> {
+    if (requester.role === 'student') {
+      // Self-scoping: a student may only ever see their own plans. The
+      // requester's identity — never the client-supplied `student_id` — is
+      // what decides the filter, so a student cannot enumerate another
+      // student's plans by passing a different `student_id` in the query.
+      return this.studyPlansRepository.findAll({
+        studentId: requester.userId,
+        status: query.status,
+        createdBy: undefined,
+      });
+    }
     assertCanManageDoman(requester);
     return this.studyPlansRepository.findAll({
       studentId: query.student_id,
@@ -450,6 +465,115 @@ export class StudyPlansService {
     return plan;
   }
 
+  /**
+   * Valida que una categoría defina, a lo sumo, uno de los tres modos
+   * mutuamente excluyentes. Es el único punto de validación de esta regla:
+   * lo comparten `buildAndValidateLevels` (al guardar) y `previewCategoryCards`
+   * (al previsualizar), para que ambos flujos rechacen exactamente los mismos
+   * payloads inválidos.
+   */
+  private assertSingleCategoryMode(
+    targetCardsCount: number | undefined,
+    wordCardIds: string[] | undefined,
+    wordCardWords: string[] | undefined,
+  ): void {
+    const definedModes = [
+      targetCardsCount !== undefined,
+      wordCardIds !== undefined,
+      wordCardWords !== undefined,
+    ].filter(Boolean).length;
+    if (definedModes > 1) {
+      throw new BadRequestException(
+        'A study plan category cannot define more than one of target_cards_count, word_card_ids, word_card_words',
+      );
+    }
+  }
+
+  /** Normaliza y valida una lista de palabras pineadas (compartido con preview). */
+  private normalizeAndValidateWordCardWords(words: string[]): string[] {
+    const normalizedWords = words.map((word) => normalizeDomanWord(word));
+    if (normalizedWords.some((word) => word.length === 0)) {
+      throw new BadRequestException(
+        'word_card_words entries must not be empty after normalization',
+      );
+    }
+    if (new Set(normalizedWords).size !== normalizedWords.length) {
+      throw new BadRequestException(
+        'word_card_words entries must be unique after normalization',
+      );
+    }
+    return normalizedWords;
+  }
+
+  /**
+   * Previsualiza, por estudiante, las tarjetas que resolvería una categoría
+   * en modo `word_card_words`/`target_cards_count` SIN persistir nada.
+   *
+   * Llama al mismo despachador exportado (`resolveStudyPlanCategoryCards`)
+   * que usa la generación real de planes diarios (`daily-plans.service.ts`),
+   * para que la previsualización y la generación nunca puedan divergir.
+   */
+  async previewCategoryCards(
+    dto: PreviewCategoryCardsDto,
+    requester: DomanRequester,
+  ): Promise<{
+    students: Array<{
+      student_id: string;
+      cards: Array<{ id: string; word: string; status: string }>;
+      unresolved_words: string[];
+    }>;
+  }> {
+    assertCanManageDoman(requester);
+    this.assertSingleCategoryMode(
+      dto.target_cards_count,
+      undefined,
+      dto.word_card_words,
+    );
+    await this.categoriesService.findById(dto.category_id);
+
+    const normalizedWords =
+      dto.word_card_words !== undefined
+        ? this.normalizeAndValidateWordCardWords(dto.word_card_words)
+        : undefined;
+
+    const category: DomanStudyPlanCategory =
+      normalizedWords !== undefined
+        ? { category_id: dto.category_id, word_card_words: normalizedWords }
+        : {
+            category_id: dto.category_id,
+            target_cards_count:
+              dto.target_cards_count ?? DEFAULT_DAILY_PLAN_TARGET_CARDS,
+          };
+
+    const students = await Promise.all(
+      dto.student_ids.map(async (studentId) => {
+        const cards = await resolveStudyPlanCategoryCards(
+          this.wordCardsRepository,
+          category,
+          studentId,
+        );
+        const resolvedNormalizedWords = new Set(
+          cards.map((card) => normalizeDomanWord(card.word)),
+        );
+        const unresolvedWords =
+          normalizedWords?.filter(
+            (word) => !resolvedNormalizedWords.has(word),
+          ) ?? [];
+        return {
+          student_id: studentId,
+          cards: cards.map((card) => ({
+            id: card.id,
+            word: card.word,
+            status: card.status,
+          })),
+          unresolved_words: unresolvedWords,
+        };
+      }),
+    );
+
+    return { students };
+  }
+
   private async buildAndValidateLevels(
     levelDtos: StudyPlanLevelDto[],
     planStart: Date,
@@ -464,14 +588,11 @@ export class StudyPlansService {
         start_date: planDateToUtcMidnight(level.start_date),
         end_date: planDateToUtcMidnight(level.end_date),
         categories: level.categories.map((category) => {
-          if (
-            category.word_card_ids !== undefined &&
-            category.target_cards_count !== undefined
-          ) {
-            throw new BadRequestException(
-              'A study plan category cannot define both target_cards_count and word_card_ids',
-            );
-          }
+          this.assertSingleCategoryMode(
+            category.target_cards_count,
+            category.word_card_ids,
+            category.word_card_words,
+          );
           if (category.word_card_ids !== undefined) {
             if (!legacyExactStudentId) {
               throw new BadRequestException(
@@ -481,6 +602,14 @@ export class StudyPlansService {
             return {
               category_id: category.category_id,
               word_card_ids: [...category.word_card_ids],
+            };
+          }
+          if (category.word_card_words !== undefined) {
+            return {
+              category_id: category.category_id,
+              word_card_words: this.normalizeAndValidateWordCardWords(
+                category.word_card_words,
+              ),
             };
           }
           return {
@@ -530,6 +659,9 @@ export class StudyPlansService {
               `target_cards_count must be an integer between ${MIN_DAILY_PLAN_TARGET_CARDS} and ${MAX_DAILY_PLAN_TARGET_CARDS}`,
             );
           }
+          continue;
+        }
+        if (category.word_card_words !== undefined) {
           continue;
         }
         const wordCardIds = category.word_card_ids ?? [];

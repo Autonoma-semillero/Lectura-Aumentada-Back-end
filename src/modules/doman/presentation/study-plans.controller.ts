@@ -23,6 +23,7 @@ import { CreateStudyPlanDto } from '../dto/create-study-plan.dto';
 import { GenerateStudyPlanDayDto } from '../dto/generate-study-plan-day.dto';
 import { GetActiveStudyPlanQueryDto } from '../dto/get-active-study-plan-query.dto';
 import { ListStudyPlansQueryDto } from '../dto/list-study-plans-query.dto';
+import { PreviewCategoryCardsDto } from '../dto/preview-category-cards.dto';
 import { UpdateStudyPlanDto } from '../dto/update-study-plan.dto';
 
 @ApiTags('doman-study-plans')
@@ -34,6 +35,7 @@ export class StudyPlansController {
   constructor(private readonly studyPlansService: StudyPlansService) {}
 
   @Get()
+  @Roles('student', 'teacher', 'admin')
   async list(
     @Query() query: ListStudyPlansQueryDto,
     @Req() req: Request & { user: AuthRequestUser },
@@ -68,6 +70,18 @@ export class StudyPlansController {
     @Req() req: Request & { user: AuthRequestUser },
   ): Promise<unknown> {
     return this.studyPlansService.create(dto, this.toRequester(req));
+  }
+
+  @Post('preview-category-cards')
+  @HttpCode(HttpStatus.OK)
+  async previewCategoryCards(
+    @Body() dto: PreviewCategoryCardsDto,
+    @Req() req: Request & { user: AuthRequestUser },
+  ): Promise<unknown> {
+    return this.studyPlansService.previewCategoryCards(
+      dto,
+      this.toRequester(req),
+    );
   }
 
   @Patch(':id')

@@ -1,8 +1,10 @@
 import type { WordCardListed } from '../../categories/domain/interfaces/word-card-listed.interface';
 import type { IWordCardsRepository } from '../../categories/domain/interfaces/word-cards.repository.interface';
 import {
+  normalizeDomanWord,
   resolveEligibleDomanCards,
   resolveStudyPlanCategoryCards,
+  resolveWordsForStudent,
   sortDomanCardsByPriority,
 } from './word-card-selection.util';
 
@@ -14,6 +16,7 @@ describe('word-card-selection.util', () => {
 
   const wordCardsRepository = {
     findByIds: jest.fn(),
+    listByStudentAndCategory: jest.fn(),
     listByStudentCategoryAndStatuses: jest.fn(),
   };
 
@@ -187,6 +190,129 @@ describe('word-card-selection.util', () => {
       );
 
       expect(cards.map((card) => card.id)).toEqual(['valida']);
+    });
+
+    it('despacha a word_card_words cuando está definido, ignorando target_cards_count', async () => {
+      wordCardsRepository.listByStudentAndCategory.mockResolvedValue([
+        buildCard({ id: 'gato-card', word: 'Gato', status: 'active' }),
+      ]);
+
+      const cards = await resolveStudyPlanCategoryCards(
+        repository(),
+        {
+          category_id: categoryId,
+          word_card_words: ['gato'],
+          target_cards_count: 5,
+        },
+        studentId,
+      );
+
+      expect(cards.map((card) => card.id)).toEqual(['gato-card']);
+      expect(
+        wordCardsRepository.listByStudentCategoryAndStatuses,
+      ).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('normalizeDomanWord', () => {
+    it('recorta, elimina acentos, pasa a minúsculas y colapsa espacios', () => {
+      expect(normalizeDomanWord('  Árbol   Grande  ')).toBe('arbol grande');
+    });
+
+    it('produce el mismo resultado para variantes equivalentes', () => {
+      expect(normalizeDomanWord('Ñoño')).toBe(normalizeDomanWord('ñoño'));
+      expect(normalizeDomanWord('CAFÉ')).toBe(normalizeDomanWord('café')); // NFKD strip
+    });
+
+    it('colapsa espacios internos múltiples a uno solo', () => {
+      expect(normalizeDomanWord('gato   negro')).toBe('gato negro');
+    });
+  });
+
+  describe('resolveWordsForStudent', () => {
+    it('resuelve tarjetas cuyo word normalizado coincide, respetando la prioridad', async () => {
+      wordCardsRepository.listByStudentAndCategory.mockResolvedValue([
+        buildCard({ id: 'gato-completed', word: 'Gato', status: 'completed' }),
+        buildCard({ id: 'gato-new', word: 'gato', status: 'new' }),
+        buildCard({ id: 'perro', word: 'Perro', status: 'active' }),
+      ]);
+
+      const result = await resolveWordsForStudent(
+        repository(),
+        ['gato', 'perro'],
+        studentId,
+        categoryId,
+      );
+
+      // Una tarjeta completed pineada explícitamente NUNCA debe descartarse
+      // por estar fuera de la tiering new/active de resolveEligibleDomanCards.
+      expect(result.cards.map((card) => card.id)).toEqual(
+        expect.arrayContaining(['gato-completed', 'gato-new', 'perro']),
+      );
+      expect(result.unresolvedWords).toEqual([]);
+    });
+
+    it('reporta palabras sin coincidencia sin lanzar error', async () => {
+      wordCardsRepository.listByStudentAndCategory.mockResolvedValue([
+        buildCard({ id: 'gato', word: 'gato', status: 'active' }),
+      ]);
+
+      const result = await resolveWordsForStudent(
+        repository(),
+        ['gato', 'inexistente'],
+        studentId,
+        categoryId,
+      );
+
+      expect(result.cards.map((card) => card.id)).toEqual(['gato']);
+      expect(result.unresolvedWords).toEqual(['inexistente']);
+    });
+
+    it('excluye tarjetas archivadas', async () => {
+      wordCardsRepository.listByStudentAndCategory.mockResolvedValue([
+        buildCard({ id: 'gato-archivada', word: 'gato', status: 'archived' }),
+      ]);
+
+      const result = await resolveWordsForStudent(
+        repository(),
+        ['gato'],
+        studentId,
+        categoryId,
+      );
+
+      expect(result.cards).toEqual([]);
+      expect(result.unresolvedWords).toEqual(['gato']);
+    });
+
+    it('compara usando normalización (acentos, mayúsculas, espacios)', async () => {
+      wordCardsRepository.listByStudentAndCategory.mockResolvedValue([
+        buildCard({ id: 'arbol', word: 'árbol', status: 'active' }),
+      ]);
+
+      const result = await resolveWordsForStudent(
+        repository(),
+        ['  ARBOL  '],
+        studentId,
+        categoryId,
+      );
+
+      expect(result.cards.map((card) => card.id)).toEqual(['arbol']);
+      expect(result.unresolvedWords).toEqual([]);
+    });
+
+    it('usa listByStudentAndCategory con el estudiante y la categoría dados', async () => {
+      wordCardsRepository.listByStudentAndCategory.mockResolvedValue([]);
+
+      await resolveWordsForStudent(
+        repository(),
+        ['gato'],
+        studentId,
+        categoryId,
+      );
+
+      expect(
+        wordCardsRepository.listByStudentAndCategory,
+      ).toHaveBeenCalledWith(studentId, categoryId);
     });
   });
 });

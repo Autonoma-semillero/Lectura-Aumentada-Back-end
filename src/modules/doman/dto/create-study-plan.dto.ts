@@ -75,6 +75,21 @@ export class StudyPlanCategoryDto {
   @ArrayUnique()
   @IsMongoId({ each: true })
   word_card_ids?: string[];
+
+  @ApiPropertyOptional({
+    type: [String],
+    description:
+      'Selección explícita de palabras a resolver por estudiante en cada generación.',
+  })
+  @IsOptional()
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(50)
+  @ArrayUnique()
+  @IsString({ each: true })
+  @IsNotEmpty({ each: true })
+  @MaxLength(60, { each: true })
+  word_card_words?: string[];
 }
 
 export class StudyPlanLevelDto {

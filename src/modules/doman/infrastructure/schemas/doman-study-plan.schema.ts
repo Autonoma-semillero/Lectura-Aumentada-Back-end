@@ -8,6 +8,10 @@ const StudyPlanCategorySchema = new Schema(
       type: [{ type: Schema.Types.ObjectId }],
       default: undefined,
     },
+    word_card_words: {
+      type: [String],
+      default: undefined,
+    },
   },
   { _id: false },
 );
