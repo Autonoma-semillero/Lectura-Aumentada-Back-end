@@ -522,7 +522,35 @@ Cuando se modifiquen campos:
 - No hay transacciones ni estrategia de consistencia eventual definidas.
 - No hay versionado de API (URL o header); el contrato se documenta en Swagger en `/api-docs`.
 
-## 14. Próximos pasos recomendados
+## 14. Análisis estático (SonarCloud)
+
+El workflow [`.github/workflows/sonar.yml`](./.github/workflows/sonar.yml) analiza el
+repositorio en cada push y PR a `main`/`master`/`develop`, usando la cobertura que
+genera `npm run test:cov` (`coverage/lcov.info`). La configuración del proyecto vive
+en [`sonar-project.properties`](./sonar-project.properties).
+
+Está **deliberadamente separado de `ci.yml`**: si el token falta o SonarCloud se cae,
+el gate de calidad (lint, typecheck, build, tests, e2e) no se ve afectado. Si
+`SONAR_TOKEN` no está configurado, el workflow emite un aviso y se omite en vez de
+fallar.
+
+### Puesta en marcha (una sola vez)
+
+1. Entrar en [sonarcloud.io](https://sonarcloud.io) con la cuenta de GitHub y crear
+   la organización a partir de `Autonoma-semillero`.
+2. Importar este repositorio. SonarCloud generará un `projectKey` y una
+   `organization`; **si no coinciden con los de `sonar-project.properties`, corregir
+   el archivo**.
+3. En el proyecto, elegir *Analysis Method* → **GitHub Actions**. SonarCloud mostrará
+   un token.
+4. Guardarlo en GitHub: *Settings → Secrets and variables → Actions → New repository
+   secret*, con nombre **`SONAR_TOKEN`**.
+5. Desactivar *Automatic Analysis* en SonarCloud (*Administration → Analysis Method*):
+   es incompatible con el análisis por CI y haría fallar el workflow.
+
+A partir de ahí cada PR recibe el resultado como check y como comentario.
+
+## 15. Próximos pasos recomendados
 
 1. Endpoints de auth con estrategia JWT real y uso coherente de `@Public()` donde aplique.
 2. Implementación real de repositorios Mongo.

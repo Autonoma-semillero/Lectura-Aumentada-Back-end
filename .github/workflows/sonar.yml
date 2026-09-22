@@ -1,0 +1,62 @@
+name: SonarCloud
+
+# Deliberadamente separado de ci.yml: si SONAR_TOKEN no está configurado o
+# SonarCloud falla, el gate de calidad que ya existe (lint, typecheck, build,
+# tests, e2e) no se ve afectado.
+on:
+  push:
+    branches: [main, master, develop]
+  pull_request:
+    branches: [main, master, develop]
+
+jobs:
+  sonar:
+    name: Análisis de código
+    runs-on: ubuntu-latest
+    services:
+      mongodb:
+        image: mongo:7
+        ports:
+          - 27017:27017
+    env:
+      NODE_ENV: test
+      MONGODB_URI: mongodb://127.0.0.1:27017/lectura_aumentada_sonar
+      JWT_SECRET: sonar-jwt-secret-must-be-at-least-32-chars
+      JWT_EXPIRES_IN: 1d
+      AUTH_DEMO_SEED_ENABLED: 'true'
+      DEMO_CONTENT_SEED_ENABLED: 'false'
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+    steps:
+      - name: Comprobar que SONAR_TOKEN está configurado
+        id: guard
+        run: |
+          if [ -z "$SONAR_TOKEN" ]; then
+            echo "configurado=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::SONAR_TOKEN no está configurado; se omite el análisis. Ver README §14."
+          else
+            echo "configurado=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.guard.outputs.configurado == 'true'
+        with:
+          # SonarCloud necesita el historial completo para atribuir los issues
+          # a su autor y calcular el "new code".
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        if: steps.guard.outputs.configurado == 'true'
+        with:
+          node-version: '20'
+          cache: npm
+
+      - run: npm ci
+        if: steps.guard.outputs.configurado == 'true'
+
+      - name: Generar cobertura
+        if: steps.guard.outputs.configurado == 'true'
+        run: npm run test:cov
+
+      - name: Escanear con SonarCloud
+        if: steps.guard.outputs.configurado == 'true'
+        uses: SonarSource/sonarqube-scan-action@v5
