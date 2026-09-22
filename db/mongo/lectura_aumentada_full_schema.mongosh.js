@@ -471,6 +471,7 @@ ensureCollection('doman_study_plans', {
                 oneOf: [
                   { required: ['target_cards_count'] },
                   { required: ['word_card_ids'] },
+                  { required: ['word_card_words'] },
                 ],
                 additionalProperties: false,
                 properties: {
@@ -486,6 +487,17 @@ ensureCollection('doman_study_plans', {
                     maxItems: 50,
                     uniqueItems: true,
                     items: { bsonType: 'objectId' },
+                  },
+                  word_card_words: {
+                    bsonType: 'array',
+                    minItems: 1,
+                    maxItems: 50,
+                    uniqueItems: true,
+                    items: {
+                      bsonType: 'string',
+                      minLength: 1,
+                      maxLength: 60,
+                    },
                   },
                 },
               },

@@ -727,6 +727,7 @@ export class StudyPlansService {
           total +
           (category.target_cards_count ??
             category.word_card_ids?.length ??
+            category.word_card_words?.length ??
             DEFAULT_DAILY_PLAN_TARGET_CARDS),
         0,
       );

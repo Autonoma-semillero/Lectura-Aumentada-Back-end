@@ -108,6 +108,11 @@ export class StudyPlansRepository implements IStudyPlansRepository {
           word_card_ids: Array.isArray(category.word_card_ids)
             ? this.objectIdsToStrings(category.word_card_ids)
             : undefined,
+          word_card_words: Array.isArray(category.word_card_words)
+            ? category.word_card_words.filter(
+                (word): word is string => typeof word === 'string',
+              )
+            : undefined,
         }),
       ),
     };
@@ -131,6 +136,9 @@ export class StudyPlansRepository implements IStudyPlansRepository {
           document.word_card_ids = category.word_card_ids.map(
             (id) => new Types.ObjectId(id),
           );
+        }
+        if (category.word_card_words !== undefined) {
+          document.word_card_words = [...category.word_card_words];
         }
         return document;
       }),

@@ -168,6 +168,68 @@ describe('StudyPlansRepository', () => {
     expect(created.student_id).toBe(studentId);
   });
 
+  it('persiste y reconstruye la selección explícita por palabras', async () => {
+    const { repository, findOne, insertOne } = createRepository();
+    const insertedId = new Types.ObjectId(planId);
+    let insertedDocument: Record<string, unknown> | undefined;
+    insertOne.mockImplementation(async (document) => {
+      insertedDocument = document;
+      return { insertedId };
+    });
+    findOne.mockImplementation(async () => ({
+      _id: insertedId,
+      ...insertedDocument,
+    }));
+
+    const created = await repository.create({
+      name: 'Plan con palabras',
+      groupIds: [],
+      directStudentIds: [studentId],
+      students: [{ student_id: studentId, sources: [{ type: 'direct' }] }],
+      startDate: new Date('2026-09-01T00:00:00.000Z'),
+      endDate: new Date('2026-09-30T00:00:00.000Z'),
+      sessionsPerDay: 5,
+      displayMs: 2200,
+      audioMode: 'manual',
+      mode: 'auto',
+      status: 'active',
+      levels: [
+        {
+          id: levelId,
+          name: 'Nivel 1',
+          order_index: 1,
+          start_date: new Date('2026-09-01T00:00:00.000Z'),
+          end_date: new Date('2026-09-30T00:00:00.000Z'),
+          categories: [
+            { category_id: categoryId, word_card_words: ['gato', 'perro'] },
+          ],
+        },
+      ],
+      createdBy: creatorId,
+    });
+
+    expect(insertOne).toHaveBeenCalledWith(
+      expect.objectContaining({
+        levels: [
+          expect.objectContaining({
+            categories: [
+              {
+                category_id: new Types.ObjectId(categoryId),
+                word_card_words: ['gato', 'perro'],
+              },
+            ],
+          }),
+        ],
+      }),
+    );
+    expect(created.levels[0].categories[0]).toEqual({
+      category_id: categoryId,
+      target_cards_count: undefined,
+      word_card_ids: undefined,
+      word_card_words: ['gato', 'perro'],
+    });
+  });
+
   function createRepository() {
     const findOne = jest.fn();
     const insertOne = jest.fn();

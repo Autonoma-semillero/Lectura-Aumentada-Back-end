@@ -40,6 +40,19 @@ estado y niveles sin solapamientos. Una categoría v2 se representa mediante:
 }
 ```
 
+También puede fijar palabras explícitas, que se resuelven de forma independiente
+contra el catálogo de cada estudiante al generar el día:
+
+```json
+{
+  "category_id": "ObjectId",
+  "word_card_words": ["gato", "perro"]
+}
+```
+
+`target_cards_count`, `word_card_words` y el campo legacy `word_card_ids` son
+modos mutuamente excluyentes.
+
 Las tarjetas no se comparten entre estudiantes: al generar un día, el backend
 busca las tarjetas elegibles del alumno y la categoría, prioriza estados `new`,
 `active` y después `completed`, y limita el resultado a
