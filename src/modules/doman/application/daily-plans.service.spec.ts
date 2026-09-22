@@ -56,8 +56,10 @@ describe('DailyPlansService', () => {
   const wordCardsRepository = {
     countWordCardsByCategoryForStudent: jest.fn(),
     findByIds: jest.fn(),
+    listByCategoryId: jest.fn(),
     listByStudentAndCategory: jest.fn(),
     listByStudentCategoryAndStatuses: jest.fn(),
+    create: jest.fn(),
   };
   const categoriesService = {
     findById: jest.fn(),
@@ -73,6 +75,7 @@ describe('DailyPlansService', () => {
     jest.resetAllMocks();
     studyPlansRepository.findActiveForStudentAndDate.mockResolvedValue(null);
     sessionCardsRepository.listBySessionId.mockResolvedValue([]);
+    wordCardsRepository.listByCategoryId.mockResolvedValue([]);
     const moduleRef = await Test.createTestingModule({
       providers: [
         DailyPlansService,
@@ -712,27 +715,50 @@ describe('DailyPlansService', () => {
     ).resolves.toMatchObject({ plan: { id: planId } });
   });
 
-  it('rechaza la generación cuando ninguna palabra pineada resuelve a una tarjeta del estudiante', async () => {
+  it('materializa para el estudiante las palabras explícitas del plan', async () => {
     const studyPlan = buildStudyPlan([studentId], {
       category_id: categoryId,
-      word_card_words: ['inexistente'],
+      word_card_words: ['Caballo'],
     });
+    const createdCard = {
+      ...buildCards(studentId)[0],
+      word: 'caballo',
+      initial_letter: 'C',
+      status: 'new',
+      audio_url: 'https://cdn.example/caballo.mp3',
+    };
     studyPlansRepository.findActiveForStudentAndDate.mockResolvedValue(
       studyPlan,
     );
     categoriesService.findById.mockResolvedValue({ id: categoryId });
     dailyPlansRepository.findByStudentAndPlanDate.mockResolvedValue(null);
-    wordCardsRepository.listByStudentAndCategory.mockResolvedValue(
-      buildCards(studentId),
-    );
+    wordCardsRepository.listByStudentAndCategory
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([createdCard]);
+    wordCardsRepository.listByCategoryId.mockResolvedValue([
+      { ...createdCard, student_id: otherStudentId },
+    ]);
+    wordCardsRepository.create.mockResolvedValue(createdCard);
+    dailyPlansRepository.create.mockResolvedValue(buildPlan(studentId));
+    sessionsRepository.create.mockResolvedValue(buildSession(studentId));
+    sessionCardsRepository.createMany.mockResolvedValue(undefined);
 
     await expect(
       service.generate(
         { student_id: studentId, category_id: categoryId },
         teacherRequester,
       ),
-    ).rejects.toThrow('No available word cards to generate the daily plan');
-    expect(dailyPlansRepository.create).not.toHaveBeenCalled();
+    ).resolves.toMatchObject({ plan: { id: planId }, cards_count: 1 });
+    expect(wordCardsRepository.create).toHaveBeenCalledWith({
+      studentId,
+      word: 'caballo',
+      initialLetter: 'C',
+      audioUrl: 'https://cdn.example/caballo.mp3',
+      categoryId,
+      status: 'new',
+      language: undefined,
+      learningUnitId: undefined,
+    });
   });
 
   it('genera con el subconjunto resuelto cuando solo algunas palabras pineadas coinciden', async () => {

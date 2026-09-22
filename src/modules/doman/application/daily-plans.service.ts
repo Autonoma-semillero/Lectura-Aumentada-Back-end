@@ -8,6 +8,10 @@ import {
 } from '@nestjs/common';
 import { MongoServerError } from 'mongodb';
 import { isMongoObjectId } from '../../../common/utils/object-id';
+import {
+  initialLetterFromNormalizedWord,
+  normalizeWordForStorage,
+} from '../../../common/utils/word-normalize';
 import { CategoriesService } from '../../categories/application/categories.service';
 import { WORD_CARDS_REPOSITORY } from '../../categories/domain/constants/categories.tokens';
 import { WordCardListed } from '../../categories/domain/interfaces/word-card-listed.interface';
@@ -61,8 +65,10 @@ import {
   todayPlanDateUtcMidnight,
 } from './plan-date.util';
 import {
+  normalizeDomanWord,
   resolveEligibleDomanCards,
   resolveStudyPlanCategoryCards,
+  resolveWordsForStudent,
 } from './word-card-selection.util';
 
 @Injectable()
@@ -605,10 +611,58 @@ export class DailyPlansService {
     return [];
   }
 
-  private resolveConfiguredCards(
+  private async resolveConfiguredCards(
     category: DomanStudyPlanCategory,
     studentId: string,
   ): Promise<WordCardListed[]> {
+    if (category.word_card_words !== undefined) {
+      const initialResolution = await resolveWordsForStudent(
+        this.wordCardsRepository,
+        category.word_card_words,
+        studentId,
+        category.category_id,
+      );
+      if (initialResolution.unresolvedWords.length === 0) {
+        return initialResolution.cards;
+      }
+
+      const categoryTemplates =
+        await this.wordCardsRepository.listByCategoryId(category.category_id);
+      const templatesByWord = new Map(
+        categoryTemplates.map((card) => [normalizeDomanWord(card.word), card]),
+      );
+      for (const rawWord of initialResolution.unresolvedWords) {
+        const word = normalizeWordForStorage(rawWord);
+        if (!word) {
+          continue;
+        }
+        const template = templatesByWord.get(normalizeDomanWord(word));
+        try {
+          await this.wordCardsRepository.create({
+            studentId,
+            word,
+            initialLetter: initialLetterFromNormalizedWord(word),
+            audioUrl: template?.audio_url,
+            categoryId: category.category_id,
+            status: 'new',
+            language: template?.language,
+            learningUnitId: template?.learning_unit_id,
+          });
+        } catch (error) {
+          if (!(error instanceof MongoServerError && error.code === 11000)) {
+            throw error;
+          }
+        }
+      }
+
+      const finalResolution = await resolveWordsForStudent(
+        this.wordCardsRepository,
+        category.word_card_words,
+        studentId,
+        category.category_id,
+      );
+      return finalResolution.cards;
+    }
     return resolveStudyPlanCategoryCards(
       this.wordCardsRepository,
       category,
