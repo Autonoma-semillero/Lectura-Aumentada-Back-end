@@ -730,9 +730,21 @@ db.doman_word_cards.createIndex(
   { name: 'ix_word_cards_category_created' },
 );
 
+if (
+  db.doman_daily_plans
+    .getIndexes()
+    .some((index) => index.name === 'ux_daily_plan_student_date_category')
+) {
+  db.doman_daily_plans.dropIndex('ux_daily_plan_student_date_category');
+  print('dropped legacy index: ux_daily_plan_student_date_category');
+}
+
 db.doman_daily_plans.createIndex(
-  { student_id: 1, plan_date: 1, category_id: 1 },
-  { unique: true, name: 'ux_daily_plan_student_date_category' },
+  { student_id: 1, plan_date: 1, category_id: 1, study_plan_id: 1 },
+  {
+    unique: true,
+    name: 'ux_daily_plan_student_date_category_study_plan',
+  },
 );
 
 db.doman_daily_plans.createIndex(

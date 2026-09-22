@@ -453,6 +453,34 @@ describe('StudyPlansService', () => {
     ).rejects.toBeInstanceOf(ConflictException);
   });
 
+  it('permite asignar varios planes al mismo estudiante en fechas diferentes', async () => {
+    const first = buildCreateDto();
+    const second = {
+      ...buildCreateDto(),
+      name: 'Plan siguiente',
+      start_date: '2026-12-01',
+      end_date: '2027-02-28',
+      levels: [
+        {
+          ...buildCreateDto().levels[0],
+          start_date: '2026-12-01',
+          end_date: '2027-02-28',
+        },
+      ],
+    };
+
+    await expect(service.create(first, requester)).resolves.toBeDefined();
+    await expect(service.create(second, requester)).resolves.toBeDefined();
+
+    expect(studyPlansRepository.create).toHaveBeenCalledTimes(2);
+    expect(studyPlansRepository.findOverlappingActive).toHaveBeenCalledWith(
+      [studentId],
+      new Date('2026-12-01T00:00:00.000Z'),
+      new Date('2027-02-28T00:00:00.000Z'),
+      undefined,
+    );
+  });
+
   it('genera cada categoría para cada estudiante y conserva resultados parciales', async () => {
     const plan = buildPlan([studentId, otherStudentId]);
     plan.levels[0].categories.push({

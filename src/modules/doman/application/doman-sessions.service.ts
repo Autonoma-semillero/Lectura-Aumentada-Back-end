@@ -114,10 +114,16 @@ export class DomanSessionsService {
       throw new NotFoundException('No daily plan found for today');
     }
     const today = todayPlanDateUtcMidnight();
+    const activeStudyPlan =
+      await this.studyPlansRepository.findActiveForStudentAndDate(
+        query.student_id,
+        today,
+      );
     const plan = await this.dailyPlansRepository.findByStudentAndPlanDate(
       query.student_id,
       today,
       categoryId,
+      activeStudyPlan?.id,
     );
     if (!plan) {
       throw new NotFoundException('No daily plan found for today');

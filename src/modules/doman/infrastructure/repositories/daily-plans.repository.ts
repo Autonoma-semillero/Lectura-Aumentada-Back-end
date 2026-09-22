@@ -71,14 +71,27 @@ export class DailyPlansRepository implements IDailyPlansRepository {
     studentId: string,
     planDateUtcMidnight: Date,
     categoryId: string,
+    studyPlanId?: string,
   ): Promise<DomanDailyPlan | null> {
-    if (!Types.ObjectId.isValid(studentId) || !Types.ObjectId.isValid(categoryId)) {
+    if (
+      !Types.ObjectId.isValid(studentId) ||
+      !Types.ObjectId.isValid(categoryId) ||
+      (studyPlanId !== undefined && !Types.ObjectId.isValid(studyPlanId))
+    ) {
       return null;
     }
     const filter: Document = {
       student_id: new Types.ObjectId(studentId),
       plan_date: planDateUtcMidnight,
       category_id: new Types.ObjectId(categoryId),
+      ...(studyPlanId
+        ? { study_plan_id: new Types.ObjectId(studyPlanId) }
+        : {
+            $or: [
+              { study_plan_id: { $exists: false } },
+              { study_plan_id: null },
+            ],
+          }),
     };
     const doc = await this.coll().findOne(filter);
     return doc ? this.toEntity(doc) : null;

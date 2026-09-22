@@ -159,6 +159,7 @@ export class DailyPlansService {
       studentId,
       today,
       resolvedCategoryId,
+      studyContext?.plan.id,
     );
     if (existing) {
       const sessions = await this.sessionsRepository.findByDailyPlanId(
@@ -265,6 +266,7 @@ export class DailyPlansService {
       dto.student_id,
       planDate,
       categoryId,
+      studyContext?.plan.id,
     );
     let existingSessions: DomanSession[] = [];
     if (existing) {

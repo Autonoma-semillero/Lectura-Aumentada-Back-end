@@ -165,6 +165,7 @@ describe('DailyPlansService', () => {
       studentId,
       new Date('2026-09-07T00:00:00.000Z'),
       categoryId,
+      undefined,
     );
   });
 
@@ -219,6 +220,7 @@ describe('DailyPlansService', () => {
       studentId,
       new Date('2026-09-07T00:00:00.000Z'),
       categoryId,
+      undefined,
     );
   });
 
@@ -324,6 +326,12 @@ describe('DailyPlansService', () => {
         })),
       },
     });
+    expect(dailyPlansRepository.findByStudentAndPlanDate).toHaveBeenCalledWith(
+      studentId,
+      new Date('2026-09-20T00:00:00.000Z'),
+      categoryId,
+      '507f1f77bcf86cd799439099',
+    );
     expect(
       wordCardsRepository.listByStudentCategoryAndStatuses,
     ).not.toHaveBeenCalled();

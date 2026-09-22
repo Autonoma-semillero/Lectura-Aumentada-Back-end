@@ -28,6 +28,7 @@ export interface IDailyPlansRepository {
     studentId: string,
     planDateUtcMidnight: Date,
     categoryId: string,
+    studyPlanId?: string,
   ): Promise<DomanDailyPlan | null>;
   findByStudentAndDateRange(
     studentId: string,

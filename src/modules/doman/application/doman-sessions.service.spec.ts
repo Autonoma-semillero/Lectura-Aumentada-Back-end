@@ -71,6 +71,7 @@ describe('DomanSessionsService', () => {
   };
   const studyPlansRepository = {
     findById: jest.fn(),
+    findActiveForStudentAndDate: jest.fn(),
   };
 
   let service: DomanSessionsService;
@@ -115,6 +116,7 @@ describe('DomanSessionsService', () => {
       studentId,
       new Date('2026-09-07T00:00:00.000Z'),
       categoryId,
+      undefined,
     );
   });
 
@@ -135,6 +137,31 @@ describe('DomanSessionsService', () => {
       studentId,
       expect.any(Date),
       categoryId,
+      undefined,
+    );
+  });
+
+  it('busca la siguiente sesión dentro del plan activo de la fecha', async () => {
+    const activeStudyPlanId = '507f1f77bcf86cd799439099';
+    studyPlansRepository.findActiveForStudentAndDate.mockResolvedValue({
+      id: activeStudyPlanId,
+    });
+    dailyPlansRepository.findByStudentAndPlanDate.mockResolvedValue(
+      buildPlan(),
+    );
+    sessionsRepository.findByDailyPlanId.mockResolvedValue([buildSession()]);
+    sessionCardsRepository.listBySessionId.mockResolvedValue([]);
+
+    await service.getNext(
+      { student_id: studentId, category_id: categoryId },
+      studentRequester,
+    );
+
+    expect(dailyPlansRepository.findByStudentAndPlanDate).toHaveBeenCalledWith(
+      studentId,
+      expect.any(Date),
+      categoryId,
+      activeStudyPlanId,
     );
   });
 
