@@ -8,6 +8,7 @@ import {
   SessionUserResponseDto,
 } from '../dto/login-response.dto';
 import { LoginDto } from '../dto/login.dto';
+import { StudentPinLoginDto } from '../dto/student-pin-login.dto';
 import { RefreshTokenDto } from '../dto/refresh-token.dto';
 
 /**
@@ -39,6 +40,14 @@ export class AuthService {
       accessToken: tokens.accessToken,
       user: this.mapSessionUserToDto(user),
     };
+  }
+
+  async loginWithStudentPin(dto: StudentPinLoginDto): Promise<LoginResponseDto> {
+    const user = await this.authRepository.validateStudentPin(dto.pin);
+    if (!user) throw new UnauthorizedException('Invalid student PIN');
+    const tokens = await this.authRepository.issueTokens({ userId: user.id, email: user.email, role: 'student' });
+    await this.authRepository.createSession(user.id, tokens.accessToken);
+    return { accessToken: tokens.accessToken, user: this.mapSessionUserToDto(user) };
   }
 
   async refresh(_dto: RefreshTokenDto): Promise<AuthTokensResponseDto> {

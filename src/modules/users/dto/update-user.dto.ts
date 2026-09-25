@@ -37,6 +37,12 @@ export class UpdateUserDto {
   @MinLength(8)
   password?: string;
 
+  @ApiPropertyOptional({ description: 'PIN numérico de 4 a 6 dígitos para acceso infantil.' })
+  @IsOptional()
+  @IsString()
+  @Matches(/^\d{4,6}$/)
+  student_pin?: string;
+
   @ApiPropertyOptional({ type: [String] })
   @IsOptional()
   @IsArray()

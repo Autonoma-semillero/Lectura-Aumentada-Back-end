@@ -50,6 +50,8 @@ ensureCollection('users', {
       roles: { bsonType: 'array' },
       status: { enum: ['active', 'disabled', 'pending'] },
       password_hash: { bsonType: 'string' },
+      student_pin_hash: { bsonType: 'string' },
+      student_pin_lookup: { bsonType: 'string' },
       metadata: { bsonType: 'object' },
       created_at: { bsonType: 'date' },
       updated_at: { bsonType: 'date' },
@@ -209,6 +211,10 @@ db.users.createIndex(
   { unique: true, sparse: true, name: 'ux_users_username' },
 );
 db.users.createIndex({ status: 1 }, { name: 'ix_users_status' });
+db.users.createIndex(
+  { student_pin_lookup: 1 },
+  { unique: true, sparse: true, name: 'ux_users_student_pin_lookup' },
+);
 
 db.student_groups.createIndex(
   { teacher_id: 1, status: 1, normalized_name: 1 },

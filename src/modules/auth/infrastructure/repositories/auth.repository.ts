@@ -12,6 +12,7 @@ import {
   verifyPassword,
 } from '../../domain/password.util';
 import { AuthPayload, AuthTokens, SessionUser } from '../../domain/types/auth.types';
+import { createStudentPinLookup } from '../../domain/student-pin.util';
 
 /**
  * Capa infrastructure: acceso a usuarios y emisión de tokens.
@@ -90,6 +91,19 @@ export class AuthRepository implements IAuthRepository {
       );
     }
 
+    return this.toSessionUser(userDoc);
+  }
+
+  async validateStudentPin(pin: string): Promise<SessionUser | null> {
+    if (typeof pin !== 'string' || !/^\d{4,6}$/.test(pin)) return null;
+    const userDoc = await this.usersCollection().findOne({
+      student_pin_lookup: createStudentPinLookup(pin),
+      roles: 'student',
+      $and: [{ $or: [{ status: 'active' }, { status: { $exists: false } }] }],
+    });
+    if (!userDoc || !(await verifyPassword(pin, userDoc.student_pin_hash as string | undefined))) {
+      return null;
+    }
     return this.toSessionUser(userDoc);
   }
 

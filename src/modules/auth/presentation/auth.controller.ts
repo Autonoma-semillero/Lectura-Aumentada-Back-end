@@ -1,5 +1,6 @@
 import { Body, Controller, HttpCode, Post, Req } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import type { Request } from 'express';
 import { Public } from '../../../common/decorators/public.decorator';
 import { AuthService } from '../application/auth.service';
@@ -9,6 +10,7 @@ import {
   LoginResponseDto,
 } from '../dto/login-response.dto';
 import { LoginDto } from '../dto/login.dto';
+import { StudentPinLoginDto } from '../dto/student-pin-login.dto';
 import { RefreshTokenDto } from '../dto/refresh-token.dto';
 
 /**
@@ -23,6 +25,13 @@ export class AuthController {
   @Post('login')
   async login(@Body() dto: LoginDto): Promise<LoginResponseDto> {
     return this.authService.login(dto);
+  }
+
+  @Public()
+  @Post('student-pin-login')
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  async loginWithStudentPin(@Body() dto: StudentPinLoginDto): Promise<LoginResponseDto> {
+    return this.authService.loginWithStudentPin(dto);
   }
 
   @Public()

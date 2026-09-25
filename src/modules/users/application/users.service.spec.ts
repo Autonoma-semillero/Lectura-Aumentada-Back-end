@@ -76,12 +76,14 @@ describe('UsersService', () => {
       username: string;
       email: string;
       password_hash: string;
+      metadata: Record<string, unknown>;
     };
     expect(payload.email).toBe('ana@example.com');
     expect(payload.username).toBe('ana.garcia');
     expect(await verifyPassword('Lectura123!', payload.password_hash)).toBe(
       true,
     );
+    expect(payload.metadata).toEqual({});
     expect(created.username).toBe('ana.garcia');
     expect(
       (created as { password_hash?: string }).password_hash,

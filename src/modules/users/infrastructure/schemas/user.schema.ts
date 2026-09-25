@@ -14,6 +14,8 @@ export const UserSchema = new Schema(
       enum: ['active', 'disabled', 'pending'],
     },
     password_hash: { type: String },
+    student_pin_hash: { type: String },
+    student_pin_lookup: { type: String, unique: true, sparse: true },
     metadata: { type: Schema.Types.Mixed },
   },
   {

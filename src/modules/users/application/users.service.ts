@@ -1,5 +1,6 @@
 import { ConflictException, Inject, Injectable } from '@nestjs/common';
 import { hashPassword } from '../../auth/domain/password.util';
+import { createStudentPinLookup } from '../../auth/domain/student-pin.util';
 import { USERS_REPOSITORY } from '../domain/constants/users.tokens';
 import { IUsersRepository } from '../domain/interfaces/users.repository.interface';
 import { User } from '../domain/interfaces/user.interface';
@@ -55,9 +56,11 @@ export class UsersService {
       username,
       display_name: dto.display_name,
       password_hash: await hashPassword(dto.password),
+      student_pin_hash: dto.student_pin ? await hashPassword(dto.student_pin) : undefined,
+      student_pin_lookup: dto.student_pin ? createStudentPinLookup(dto.student_pin) : undefined,
       roles: dto.roles ?? ['student'],
       status: dto.status ?? 'active',
-      metadata: dto.metadata,
+      metadata: dto.metadata ?? {},
     });
     return this.toPublicUserResponse(user);
   }
@@ -87,6 +90,10 @@ export class UsersService {
         dto.password === undefined
           ? undefined
           : await hashPassword(dto.password),
+      student_pin_hash:
+        dto.student_pin === undefined ? undefined : await hashPassword(dto.student_pin),
+      student_pin_lookup:
+        dto.student_pin === undefined ? undefined : createStudentPinLookup(dto.student_pin),
       roles: dto.roles,
       status: dto.status,
       metadata: dto.metadata,
@@ -113,8 +120,10 @@ export class UsersService {
   }
 
   private toPublicUserResponse(user: User): PublicUserResponseDto {
-    const { password_hash: _passwordHash, ...rest } = user;
+    const { password_hash: _passwordHash, student_pin_hash: _studentPinHash, student_pin_lookup: _studentPinLookup, ...rest } = user;
     void _passwordHash;
+    void _studentPinHash;
+    void _studentPinLookup;
     return {
       id: rest.id,
       email: rest.email,
@@ -129,8 +138,10 @@ export class UsersService {
   }
 
   private withoutPasswordHash(user: User): User {
-    const { password_hash: _passwordHash, ...student } = user;
+    const { password_hash: _passwordHash, student_pin_hash: _studentPinHash, student_pin_lookup: _studentPinLookup, ...student } = user;
     void _passwordHash;
+    void _studentPinHash;
+    void _studentPinLookup;
     return student;
   }
 }

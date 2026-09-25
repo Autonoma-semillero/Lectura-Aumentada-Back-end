@@ -8,6 +8,8 @@ export interface User {
   roles: UserRole[];
   status?: 'active' | 'disabled' | 'pending';
   password_hash?: string;
+  student_pin_hash?: string;
+  student_pin_lookup?: string;
   metadata?: Record<string, unknown>;
   created_at: Date;
   updated_at: Date;

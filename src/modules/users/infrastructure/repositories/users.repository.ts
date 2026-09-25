@@ -34,6 +34,8 @@ export class UsersRepository implements IUsersRepository {
       roles: (doc.roles as UserRole[] | undefined) ?? [],
       status: doc.status as User['status'],
       password_hash: doc.password_hash as string | undefined,
+      student_pin_hash: doc.student_pin_hash as string | undefined,
+      student_pin_lookup: doc.student_pin_lookup as string | undefined,
       metadata: doc.metadata as Record<string, unknown> | undefined,
       created_at: doc.created_at as Date,
       updated_at: doc.updated_at as Date,
@@ -141,6 +143,12 @@ export class UsersRepository implements IUsersRepository {
     if (payload.password_hash !== undefined) {
       doc.password_hash = payload.password_hash;
     }
+    if (payload.student_pin_hash !== undefined) {
+      doc.student_pin_hash = payload.student_pin_hash;
+    }
+    if (payload.student_pin_lookup !== undefined) {
+      doc.student_pin_lookup = payload.student_pin_lookup;
+    }
     if (payload.metadata !== undefined) {
       doc.metadata = payload.metadata;
     }
@@ -184,6 +192,12 @@ export class UsersRepository implements IUsersRepository {
     }
     if (payload.password_hash !== undefined) {
       patch.password_hash = payload.password_hash;
+    }
+    if (payload.student_pin_hash !== undefined) {
+      patch.student_pin_hash = payload.student_pin_hash;
+    }
+    if (payload.student_pin_lookup !== undefined) {
+      patch.student_pin_lookup = payload.student_pin_lookup;
     }
     if (payload.metadata !== undefined) {
       patch.metadata = payload.metadata;
