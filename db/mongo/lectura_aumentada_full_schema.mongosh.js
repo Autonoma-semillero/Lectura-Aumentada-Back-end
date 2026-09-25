@@ -824,7 +824,193 @@ db.doman_exposure_logs.createIndex(
   { name: 'ix_exposure_word_ts' },
 );
 
+// ---------------------------------------------------------------------------
+// DOMAN EN VIVO — flujo dirigido por docente (reemplazo progresivo del legacy)
+// ---------------------------------------------------------------------------
+
+ensureCollection('doman_cards', {
+  $jsonSchema: {
+    bsonType: 'object',
+    required: [
+      'schema_version', 'word', 'normalized_word', 'display_text',
+      'category_id', 'content_fingerprint', 'status', 'sharing_scope',
+      'created_by', 'created_at', 'updated_at',
+    ],
+    additionalProperties: true,
+    properties: {
+      schema_version: { bsonType: 'int', enum: [1] },
+      word: { bsonType: 'string', minLength: 1, maxLength: 120 },
+      normalized_word: { bsonType: 'string', minLength: 1, maxLength: 120 },
+      display_text: { bsonType: 'string', minLength: 1, maxLength: 120 },
+      language: { bsonType: 'string', maxLength: 32 },
+      audio_url: { bsonType: 'string', maxLength: 2048 },
+      category_id: { bsonType: 'objectId' },
+      learning_unit_id: { bsonType: 'objectId' },
+      content_fingerprint: { bsonType: 'string', minLength: 64, maxLength: 64 },
+      status: { enum: ['active', 'archived'] },
+      sharing_scope: { enum: ['owner_only', 'shared'] },
+      created_by: { bsonType: 'objectId' },
+      legacy_source_card_ids: { bsonType: 'array', uniqueItems: true },
+      archived_at: { bsonType: ['date', 'null'] },
+      created_at: { bsonType: 'date' },
+      updated_at: { bsonType: 'date' },
+    },
+  },
+});
+
+ensureCollection('doman_repertoires', {
+  $jsonSchema: {
+    bsonType: 'object',
+    required: [
+      'schema_version', 'name', 'normalized_name', 'stage', 'category_id',
+      'card_ids', 'presentation', 'status', 'created_by', 'created_at',
+      'updated_at',
+    ],
+    additionalProperties: true,
+    properties: {
+      schema_version: { bsonType: 'int', enum: [1] },
+      name: { bsonType: 'string', minLength: 1, maxLength: 120 },
+      normalized_name: { bsonType: 'string', minLength: 1, maxLength: 120 },
+      description: { bsonType: 'string', maxLength: 500 },
+      stage: { enum: ['single_words', 'couplets', 'sentences', 'books'] },
+      category_id: { bsonType: 'objectId' },
+      card_ids: { bsonType: 'array', minItems: 1, maxItems: 10, uniqueItems: true },
+      presentation: { bsonType: 'object' },
+      status: { enum: ['active', 'archived'] },
+      created_by: { bsonType: 'objectId' },
+      archived_at: { bsonType: ['date', 'null'] },
+      created_at: { bsonType: 'date' },
+      updated_at: { bsonType: 'date' },
+    },
+  },
+});
+
+ensureCollection('doman_live_sessions', {
+  $jsonSchema: {
+    bsonType: 'object',
+    required: [
+      'schema_version', 'teacher_id', 'group_id', 'group_snapshot',
+      'repertoire_id', 'repertoire_snapshot', 'presentation', 'status',
+      'presentation_sequence', 'created_at', 'updated_at',
+    ],
+    additionalProperties: true,
+    properties: {
+      schema_version: { bsonType: 'int', enum: [1] },
+      teacher_id: { bsonType: 'objectId' },
+      group_id: { bsonType: 'objectId' },
+      group_snapshot: { bsonType: 'object' },
+      repertoire_id: { bsonType: 'objectId' },
+      repertoire_snapshot: { bsonType: 'object' },
+      presentation: { bsonType: 'object' },
+      status: { enum: ['lobby', 'running', 'paused', 'ended', 'cancelled'] },
+      active_card_index: { bsonType: ['int', 'null'], minimum: 0 },
+      presentation_sequence: { bsonType: 'int', minimum: 0 },
+      presentation_started_at: { bsonType: ['date', 'null'] },
+      paused_at: { bsonType: ['date', 'null'] },
+      group_active_key: { bsonType: 'objectId' },
+      started_at: { bsonType: ['date', 'null'] },
+      ended_at: { bsonType: ['date', 'null'] },
+      ended_reason: { enum: ['teacher_ended', 'teacher_cancelled', null] },
+      created_at: { bsonType: 'date' },
+      updated_at: { bsonType: 'date' },
+    },
+  },
+});
+
+ensureCollection('doman_live_session_participants', {
+  $jsonSchema: {
+    bsonType: 'object',
+    required: [
+      'session_id', 'student_id', 'invited_at', 'connection_state',
+      'current_ack_sequence', 'created_at', 'updated_at',
+    ],
+    additionalProperties: true,
+    properties: {
+      session_id: { bsonType: 'objectId' }, student_id: { bsonType: 'objectId' },
+      invited_at: { bsonType: 'date' }, joined_at: { bsonType: ['date', 'null'] },
+      last_seen_at: { bsonType: ['date', 'null'] }, left_at: { bsonType: ['date', 'null'] },
+      connection_state: { enum: ['invited', 'connected', 'ready', 'disconnected', 'left'] },
+      active_student_key: { enum: ['live', null] },
+      current_ack_sequence: { bsonType: 'int', minimum: 0 },
+      created_at: { bsonType: 'date' }, updated_at: { bsonType: 'date' },
+    },
+  },
+});
+
+ensureCollection('doman_live_session_events', {
+  $jsonSchema: {
+    bsonType: 'object',
+    required: ['session_id', 'sequence', 'event_type', 'actor_type', 'payload', 'occurred_at'],
+    additionalProperties: true,
+    properties: {
+      session_id: { bsonType: 'objectId' }, sequence: { bsonType: 'int', minimum: 0 },
+      command_id: { bsonType: 'string' },
+      event_type: { enum: ['lobby_opened', 'student_joined', 'student_ready', 'student_disconnected', 'session_started', 'card_presented', 'card_repeated', 'session_paused', 'session_resumed', 'session_ended', 'session_cancelled'] },
+      actor_type: { enum: ['teacher', 'student', 'system'] }, actor_id: { bsonType: 'objectId' },
+      payload: { bsonType: 'object' }, occurred_at: { bsonType: 'date' },
+    },
+  },
+});
+
+ensureCollection('doman_live_exposures', {
+  $jsonSchema: {
+    bsonType: 'object',
+    required: ['session_id', 'student_id', 'presentation_sequence', 'card_id', 'card_index', 'emitted_at', 'delivery_status', 'created_at', 'updated_at'],
+    additionalProperties: true,
+    properties: {
+      session_id: { bsonType: 'objectId' }, student_id: { bsonType: 'objectId' },
+      presentation_sequence: { bsonType: 'int', minimum: 1 }, card_id: { bsonType: 'objectId' }, card_index: { bsonType: 'int', minimum: 0 },
+      emitted_at: { bsonType: 'date' }, rendered_at: { bsonType: ['date', 'null'] }, acknowledged_at: { bsonType: ['date', 'null'] },
+      visibility_duration_ms: { bsonType: ['int', 'null'], minimum: 0 },
+      delivery_status: { enum: ['emitted', 'rendered', 'unconfirmed', 'not_delivered'] },
+      created_at: { bsonType: 'date' }, updated_at: { bsonType: 'date' },
+    },
+  },
+});
+
+ensureCollection('doman_student_observations', {
+  $jsonSchema: {
+    bsonType: 'object',
+    required: ['session_id', 'student_id', 'recorded_by', 'kind', 'value', 'created_at', 'updated_at'],
+    additionalProperties: true,
+    properties: {
+      session_id: { bsonType: 'objectId' }, student_id: { bsonType: 'objectId' }, recorded_by: { bsonType: 'objectId' },
+      kind: { enum: ['engagement', 'attention', 'observed_response', 'follow_up'] },
+      value: { enum: ['observed', 'not_observed', 'needs_follow_up'] },
+      note: { bsonType: 'string', maxLength: 500 }, created_at: { bsonType: 'date' }, updated_at: { bsonType: 'date' },
+    },
+  },
+});
+
+db.doman_cards.createIndex(
+  { created_by: 1, category_id: 1, content_fingerprint: 1 },
+  { unique: true, partialFilterExpression: { status: 'active' }, name: 'ux_doman_cards_owner_category_content_active' },
+);
+db.doman_cards.createIndex({ created_by: 1, status: 1, updated_at: -1 }, { name: 'ix_doman_cards_owner_status_updated' });
+db.doman_cards.createIndex({ category_id: 1, status: 1, word: 1 }, { name: 'ix_doman_cards_category_status_word' });
+db.doman_repertoires.createIndex(
+  { created_by: 1, normalized_name: 1 },
+  { unique: true, partialFilterExpression: { status: 'active' }, name: 'ux_doman_repertoires_owner_name_active' },
+);
+db.doman_repertoires.createIndex({ created_by: 1, status: 1, updated_at: -1 }, { name: 'ix_doman_repertoires_owner_status_updated' });
+db.doman_live_sessions.createIndex(
+  { group_active_key: 1 },
+  { unique: true, partialFilterExpression: { group_active_key: { $exists: true } }, name: 'ux_doman_live_sessions_one_active_group' },
+);
+db.doman_live_sessions.createIndex({ teacher_id: 1, status: 1, created_at: -1 }, { name: 'ix_doman_live_sessions_teacher_status_created' });
+db.doman_live_sessions.createIndex({ 'group_snapshot.student_ids': 1, status: 1, updated_at: -1 }, { name: 'ix_doman_live_sessions_student_status_updated' });
+db.doman_live_session_participants.createIndex({ session_id: 1, student_id: 1 }, { unique: true, name: 'ux_live_participants_session_student' });
+db.doman_live_session_participants.createIndex({ student_id: 1, active_student_key: 1 }, { unique: true, partialFilterExpression: { active_student_key: 'live' }, name: 'ux_live_participants_one_active_student' });
+db.doman_live_session_participants.createIndex({ student_id: 1, connection_state: 1, updated_at: -1 }, { name: 'ix_live_participants_student_connection' });
+db.doman_live_session_events.createIndex({ session_id: 1, sequence: 1 }, { unique: true, name: 'ux_live_events_session_sequence' });
+db.doman_live_session_events.createIndex({ session_id: 1, command_id: 1 }, { unique: true, sparse: true, name: 'ux_live_events_session_command' });
+db.doman_live_exposures.createIndex({ session_id: 1, student_id: 1, presentation_sequence: 1 }, { unique: true, name: 'ux_live_exposures_participant_presentation' });
+db.doman_live_exposures.createIndex({ student_id: 1, created_at: -1 }, { name: 'ix_live_exposures_student_created' });
+db.doman_live_exposures.createIndex({ session_id: 1, card_id: 1 }, { name: 'ix_live_exposures_session_card' });
+db.doman_student_observations.createIndex({ session_id: 1, student_id: 1, kind: 1 }, { unique: true, name: 'ux_live_observations_session_student_kind' });
+db.doman_student_observations.createIndex({ student_id: 1, created_at: -1 }, { name: 'ix_live_observations_student_created' });
+
 print(
-  'lectura_aumentada_full_schema: 15 colecciones (8 núcleo + 7 doman) e índices aplicados.',
+  'lectura_aumentada_full_schema: 22 colecciones (8 núcleo + 7 Doman legacy + 7 Doman en vivo) e índices aplicados.',
 );
 print(`reference_time=${now.toISOString()}`);

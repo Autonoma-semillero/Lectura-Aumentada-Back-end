@@ -97,6 +97,7 @@ misma palabra debe duplicarse para cada estudiante.
   "language": "es-CO",
   "audio_url": "https://…/elefante.mp3",
   "category_id": "ObjectId",
+  "content_fingerprint": "SHA-256(category, word, language, audio)",
   "learning_unit_id": "ObjectId",
   "status": "active",
   "sharing_scope": "owner_only",
@@ -125,11 +126,11 @@ Reglas:
 
 ```javascript
 db.doman_cards.createIndex(
-  { created_by: 1, category_id: 1, normalized_word: 1 },
+  { created_by: 1, category_id: 1, content_fingerprint: 1 },
   {
     unique: true,
     partialFilterExpression: { status: "active" },
-    name: "ux_doman_cards_owner_category_word_active"
+    name: "ux_doman_cards_owner_category_content_active"
   }
 );
 db.doman_cards.createIndex(
