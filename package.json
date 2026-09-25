@@ -20,7 +20,8 @@
     "demo:reset": "node scripts/reset-demo.js",
     "demo:audio": "node scripts/set-audio-urls.js",
     "demo:model:cat": "node scripts/set-demo-animal-media.js gato",
-    "demo:model:dog": "node scripts/set-demo-animal-media.js perro"
+    "demo:model:dog": "node scripts/set-demo-animal-media.js perro",
+    "migrate:live-doman": "node scripts/migrations/20260925-live-doman-sessions.js"
   },
   "engines": {
     "node": ">=20"

@@ -564,6 +564,30 @@ tasa.
    creación de planes legacy. La eliminación física requiere una política de
    retención aprobada y una migración separada.
 
+La migración ejecutable vive en
+`scripts/migrations/20260925-live-doman-sessions.js`. Es idempotente y se
+ejecuta primero sin efectos:
+
+```bash
+npm run migrate:live-doman
+```
+
+Para escribir requiere `--apply` y, cuando las tarjetas legacy no tenían
+`created_by`, el ID de un docente o administrador que será su propietario:
+
+```bash
+npm run migrate:live-doman -- --apply --fallback-owner-id=<ObjectId>
+```
+
+El retiro renombra las colecciones antiguas como `legacy_doman_*`; la purga
+solo acepta una confirmación explícita y nunca se ejecuta como parte de la
+migración normal:
+
+```bash
+npm run migrate:live-doman -- --apply --retire-legacy
+npm run migrate:live-doman -- --apply --retire-legacy --purge-legacy --confirm-purge=DELETE_LEGACY_DOMAN
+```
+
 ## Criterios de aceptación de la futura implementación
 
 - El docente puede escoger un grupo y un repertorio de cinco tarjetas, abrir
