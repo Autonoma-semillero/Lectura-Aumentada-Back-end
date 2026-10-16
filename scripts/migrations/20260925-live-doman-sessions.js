@@ -138,7 +138,7 @@ function repertoireValidator() {
         schema_version: { bsonType: 'int', enum: [1] },
         name: { bsonType: 'string', minLength: 1, maxLength: 120 },
         normalized_name: { bsonType: 'string', minLength: 1, maxLength: 120 },
-        description: { bsonType: 'string', maxLength: 500 },
+        description: { bsonType: ['string', 'null'], maxLength: 500 },
         stage: { enum: ['single_words', 'couplets', 'sentences', 'books'] },
         category_id: { bsonType: 'objectId' },
         card_ids: { bsonType: 'array', minItems: 1, maxItems: 10, uniqueItems: true, items: { bsonType: 'objectId' } },
