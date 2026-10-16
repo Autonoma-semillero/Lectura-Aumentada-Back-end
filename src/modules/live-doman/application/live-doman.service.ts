@@ -79,7 +79,7 @@ export class LiveDomanService {
       return await this.liveDomanRepository.createRepertoire({
         schema_version: 1, name, normalized_name: this.normalize(name), category_id: dto.category_id,
         stage: dto.stage, card_ids: dto.card_ids, created_by: requester.userId, status: 'active',
-        description: dto.description?.trim() || undefined,
+        ...(dto.description?.trim() ? { description: dto.description.trim() } : {}),
         presentation: { default_pacing: dto.default_pacing ?? 'teacher_controlled', default_display_ms: dto.default_display_ms ?? 1000, audio_policy: dto.audio_policy ?? 'teacher_voice' },
       });
     } catch (error) { this.rethrowDuplicateRepertoire(error); throw error; }

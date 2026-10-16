@@ -198,8 +198,9 @@ function liveSessionValidator() {
         status: { enum: ['lobby', 'running', 'paused', 'ended', 'cancelled'] },
         active_card_index: { bsonType: ['int', 'null'], minimum: 0 }, presentation_sequence: { bsonType: 'int', minimum: 0 },
         presentation_started_at: { bsonType: ['date', 'null'] }, paused_at: { bsonType: ['date', 'null'] },
+        expires_at: { bsonType: ['date', 'null'] },
         group_active_key: { bsonType: 'objectId' }, started_at: { bsonType: ['date', 'null'] }, ended_at: { bsonType: ['date', 'null'] },
-        ended_reason: { enum: ['teacher_ended', 'teacher_cancelled', null] }, created_at: { bsonType: 'date' }, updated_at: { bsonType: 'date' },
+        ended_reason: { enum: ['teacher_ended', 'teacher_cancelled', 'expired', null] }, created_at: { bsonType: 'date' }, updated_at: { bsonType: 'date' },
       },
     },
   };
