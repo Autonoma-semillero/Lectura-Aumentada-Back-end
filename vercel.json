@@ -22,7 +22,7 @@
   "crons": [
     {
       "path": "/api/doman/live-sessions/maintenance",
-      "schedule": "*/5 * * * *"
+      "schedule": "0 3 * * *"
     }
   ]
 }
