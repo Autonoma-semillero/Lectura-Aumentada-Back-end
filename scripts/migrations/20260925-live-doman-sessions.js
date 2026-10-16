@@ -102,6 +102,7 @@ function cardValidator() {
       ],
       additionalProperties: false,
       properties: {
+        _id: { bsonType: 'objectId' },
         schema_version: { bsonType: 'int', enum: [1] },
         word: { bsonType: 'string', minLength: 1, maxLength: 120 },
         normalized_word: { bsonType: 'string', minLength: 1, maxLength: 120 },
@@ -133,6 +134,7 @@ function repertoireValidator() {
       ],
       additionalProperties: false,
       properties: {
+        _id: { bsonType: 'objectId' },
         schema_version: { bsonType: 'int', enum: [1] },
         name: { bsonType: 'string', minLength: 1, maxLength: 120 },
         normalized_name: { bsonType: 'string', minLength: 1, maxLength: 120 },
@@ -178,6 +180,7 @@ function liveSessionValidator() {
       ],
       additionalProperties: false,
       properties: {
+        _id: { bsonType: 'objectId' },
         schema_version: { bsonType: 'int', enum: [1] }, teacher_id: { bsonType: 'objectId' }, group_id: { bsonType: 'objectId' },
         group_snapshot: {
           bsonType: 'object', required: ['name', 'student_ids'], additionalProperties: false,
@@ -209,6 +212,7 @@ function participantValidator() {
       required: ['session_id', 'student_id', 'invited_at', 'connection_state', 'current_ack_sequence', 'created_at', 'updated_at'],
       additionalProperties: false,
       properties: {
+        _id: { bsonType: 'objectId' },
         session_id: { bsonType: 'objectId' }, student_id: { bsonType: 'objectId' }, invited_at: { bsonType: 'date' },
         joined_at: { bsonType: ['date', 'null'] }, last_seen_at: { bsonType: ['date', 'null'] }, left_at: { bsonType: ['date', 'null'] },
         connection_state: { enum: ['invited', 'connected', 'ready', 'disconnected', 'left'] }, active_student_key: { enum: ['live', null] },
@@ -225,6 +229,7 @@ function eventValidator() {
       required: ['session_id', 'sequence', 'event_type', 'actor_type', 'payload', 'occurred_at'],
       additionalProperties: false,
       properties: {
+        _id: { bsonType: 'objectId' },
         session_id: { bsonType: 'objectId' }, sequence: { bsonType: 'int', minimum: 0 }, command_id: { bsonType: 'string', minLength: 16, maxLength: 128 },
         event_type: { enum: ['lobby_opened', 'student_joined', 'student_ready', 'student_disconnected', 'session_started', 'card_presented', 'card_repeated', 'session_paused', 'session_resumed', 'session_ended', 'session_cancelled'] },
         actor_type: { enum: ['teacher', 'student', 'system'] }, actor_id: { bsonType: 'objectId' }, payload: { bsonType: 'object' }, occurred_at: { bsonType: 'date' },
@@ -240,6 +245,7 @@ function exposureValidator() {
       required: ['session_id', 'student_id', 'presentation_sequence', 'card_id', 'card_index', 'emitted_at', 'delivery_status', 'created_at', 'updated_at'],
       additionalProperties: false,
       properties: {
+        _id: { bsonType: 'objectId' },
         session_id: { bsonType: 'objectId' }, student_id: { bsonType: 'objectId' }, presentation_sequence: { bsonType: 'int', minimum: 1 },
         card_id: { bsonType: 'objectId' }, card_index: { bsonType: 'int', minimum: 0 }, emitted_at: { bsonType: 'date' },
         rendered_at: { bsonType: ['date', 'null'] }, acknowledged_at: { bsonType: ['date', 'null'] }, visibility_duration_ms: { bsonType: ['int', 'null'], minimum: 0 },
@@ -256,6 +262,7 @@ function observationValidator() {
       required: ['session_id', 'student_id', 'recorded_by', 'kind', 'value', 'created_at', 'updated_at'],
       additionalProperties: false,
       properties: {
+        _id: { bsonType: 'objectId' },
         session_id: { bsonType: 'objectId' }, student_id: { bsonType: 'objectId' }, recorded_by: { bsonType: 'objectId' },
         kind: { enum: ['engagement', 'attention', 'observed_response', 'follow_up'] }, value: { enum: ['observed', 'not_observed', 'needs_follow_up'] },
         note: { bsonType: 'string', maxLength: 500 }, created_at: { bsonType: 'date' }, updated_at: { bsonType: 'date' },
@@ -357,10 +364,9 @@ async function migrateCards(db, fallbackOwnerId, apply) {
       ...(language ? { language } : {}), ...(audioUrl ? { audio_url: audioUrl } : {}),
       category_id: categoryId, ...(isObjectId(legacy.learning_unit_id) ? { learning_unit_id: asObjectId(legacy.learning_unit_id) } : {}),
       content_fingerprint: contentFingerprint, status: legacy.status === 'archived' ? 'archived' : 'active',
-      sharing_scope: 'owner_only', created_by: owner, legacy_source_card_ids: [legacy._id],
+      sharing_scope: 'owner_only', created_by: owner,
       archived_at: legacy.status === 'archived' ? (legacy.updated_at instanceof Date ? legacy.updated_at : now) : null,
       created_at: legacy.created_at instanceof Date ? legacy.created_at : now,
-      updated_at: now,
     };
     await db.collection('doman_cards').updateOne(
       { created_by: owner, category_id: categoryId, content_fingerprint: contentFingerprint },
@@ -444,5 +450,6 @@ async function main() {
 
 main().catch((error) => {
   console.error(`Migration failed: ${error.message}`);
+  if (error.errInfo) console.error(JSON.stringify(error.errInfo, null, 2));
   process.exitCode = 1;
 });
