@@ -1,11 +1,8 @@
 import { ValidationPipe } from '@nestjs/common';
 import { INestApplication } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
-import { mkdirSync } from 'fs';
 import { Request, Response } from 'express';
-import { static as expressStatic } from 'express';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
-import { join, resolve } from 'path';
 import { AppModule } from './app.module';
 
 type ExpressLikeHandler = (req: Request, res: Response) => void;
@@ -33,11 +30,6 @@ function configureCors(app: INestApplication): void {
 
 async function configureApp(app: INestApplication): Promise<void> {
   const server = app.getHttpAdapter().getInstance();
-  const uploadsRoot = resolve(process.cwd(), process.env.UPLOADS_DIR ?? 'uploads');
-  const audioUploadsDir = join(uploadsRoot, 'audio');
-
-  mkdirSync(audioUploadsDir, { recursive: true });
-  server.use('/uploads', expressStatic(uploadsRoot));
 
   configureCors(app);
   app.setGlobalPrefix('api');

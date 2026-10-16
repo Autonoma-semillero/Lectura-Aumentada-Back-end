@@ -1,8 +1,9 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
-import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
+import { ThrottlerModule } from '@nestjs/throttler';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
+import { UserAwareThrottlerGuard } from './common/guards/user-aware-throttler.guard';
 import databaseConfig from './config/database.config';
 import envConfig from './config/env.config';
 import jwtConfig from './config/jwt.config';
@@ -19,6 +20,7 @@ import { MarkersModule } from './modules/markers/markers.module';
 import { ProgressModule } from './modules/progress/progress.module';
 import { SeedingModule } from './modules/seeding/seeding.module';
 import { UsersModule } from './modules/users/users.module';
+import { UploadsModule } from './modules/uploads/uploads.module';
 
 @Module({
   imports: [
@@ -32,6 +34,7 @@ import { UsersModule } from './modules/users/users.module';
     MongoDbModule,
     AuthModule,
     UsersModule,
+    UploadsModule,
     LearningUnitsModule,
     ProgressModule,
     AssetsModule,
@@ -44,8 +47,8 @@ import { UsersModule } from './modules/users/users.module';
     SeedingModule,
   ],
   providers: [
-    { provide: APP_GUARD, useClass: ThrottlerGuard },
     { provide: APP_GUARD, useClass: JwtAuthGuard },
+    { provide: APP_GUARD, useClass: UserAwareThrottlerGuard },
   ],
 })
 export class AppModule {}

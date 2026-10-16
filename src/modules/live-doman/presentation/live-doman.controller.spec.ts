@@ -11,7 +11,7 @@ const ids = { card: '507f1f77bcf86cd799439013', repertoire: '507f1f77bcf86cd7994
 describe('LiveDomanController', () => {
   const service = {
     listCards: jest.fn(), createCard: jest.fn(), updateCard: jest.fn(), listRepertoires: jest.fn(), createRepertoire: jest.fn(),
-    createSession: jest.fn(), getCurrentSessions: jest.fn(), getSession: jest.fn(), joinSession: jest.fn(), command: jest.fn(), acknowledge: jest.fn(), observe: jest.fn(),
+    createSession: jest.fn(), getCurrentSessions: jest.fn(), getSession: jest.fn(), joinSession: jest.fn(), getRealtimeToken: jest.fn(), getStudentFeedRealtimeToken: jest.fn(), command: jest.fn(), acknowledge: jest.fn(), observe: jest.fn(),
   };
   const controller = new LiveDomanController(service as unknown as LiveDomanService);
   const teacherRequest = request(teacherId, 'teacher');
@@ -24,7 +24,7 @@ describe('LiveDomanController', () => {
     for (const method of ['listCards', 'createCard', 'updateCard', 'listRepertoires', 'createRepertoire', 'createSession', 'command', 'observe'] as const) {
       expect(Reflect.getMetadata(ROLES_KEY, controller[method])).toEqual(['teacher', 'admin']);
     }
-    for (const method of ['current', 'join', 'acknowledge'] as const) {
+    for (const method of ['current', 'studentFeedRealtimeToken', 'join', 'acknowledge'] as const) {
       expect(Reflect.getMetadata(ROLES_KEY, controller[method])).toEqual(['student']);
     }
   });
@@ -54,12 +54,16 @@ describe('LiveDomanController', () => {
     await controller.current(studentRequest);
     await controller.getSession(ids.session, teacherRequest);
     await controller.join(ids.session, studentRequest);
+    await controller.realtimeToken(ids.session, studentRequest);
+    await controller.studentFeedRealtimeToken(studentRequest);
     await controller.command(ids.session, command, teacherRequest);
     await controller.acknowledge(ids.session, { sequence: 1 }, studentRequest);
     await controller.observe(ids.session, observation, teacherRequest);
     expect(service.getCurrentSessions).toHaveBeenCalledWith({ userId: studentId, role: 'student' });
     expect(service.getSession).toHaveBeenCalledWith(ids.session, { userId: teacherId, role: 'teacher' });
     expect(service.joinSession).toHaveBeenCalledWith(ids.session, { userId: studentId, role: 'student' });
+    expect(service.getRealtimeToken).toHaveBeenCalledWith(ids.session, { userId: studentId, role: 'student' });
+    expect(service.getStudentFeedRealtimeToken).toHaveBeenCalledWith({ userId: studentId, role: 'student' });
     expect(service.command).toHaveBeenCalledWith(ids.session, command, { userId: teacherId, role: 'teacher' });
     expect(service.acknowledge).toHaveBeenCalledWith(ids.session, { sequence: 1 }, { userId: studentId, role: 'student' });
     expect(service.observe).toHaveBeenCalledWith(ids.session, observation, { userId: teacherId, role: 'teacher' });

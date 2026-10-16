@@ -383,7 +383,7 @@ Invariantes del plan de estudio:
 
 #### Cotas y autorización
 
-- Los rangos de `target_cards_count` (1–50), `target_sessions_count` (1–10) y `display_ms` (200–10000) viven en **`domain/constants/doman-limits.constants.ts`** y son la única fuente de verdad: DTO, clamps de servicio y validador Mongo deben coincidir.
+- Los rangos de `target_cards_count` (1–50), `target_sessions_count` (1–10) y `display_ms` (1000–10000) viven en **`domain/constants/doman-limits.constants.ts`** y son la única fuente de verdad: DTO, clamps de servicio y validador Mongo deben coincidir.
 - `assertCanAccessStudent` solo acota a los **estudiantes** (acceden únicamente a lo propio). Docentes y administradores tienen visibilidad sobre cualquier estudiante **por diseño**: el modelo acota la propiedad a nivel de grupo (`GroupsService`), no de estudiante.
 
 **Temáticas con tarjetas para un estudiante:** `GET /api/categories/with-available-word-cards?student_id=` — devuelve categorías que tienen al menos una `doman_word_card` de ese estudiante en esa temática, con `available_word_cards_count` (mismo filtro que agregación por `student_id` + `category_id`).

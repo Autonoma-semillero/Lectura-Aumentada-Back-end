@@ -18,5 +18,11 @@
       "src": "/(.*)",
       "dest": "/api/[...all].ts"
     }
+  ],
+  "crons": [
+    {
+      "path": "/api/doman/live-sessions/maintenance",
+      "schedule": "*/5 * * * *"
+    }
   ]
 }

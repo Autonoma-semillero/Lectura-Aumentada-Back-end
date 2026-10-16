@@ -29,3 +29,9 @@ Thumbs.db
 
 # uploaded files
 uploads/
+
+# Source module; only runtime upload artifacts belong to the rule above.
+!src/modules/uploads/
+!src/modules/uploads/**
+.vercel
+.env*

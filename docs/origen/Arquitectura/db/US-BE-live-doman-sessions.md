@@ -587,6 +587,14 @@ migración normal:
 ```bash
 npm run migrate:live-doman -- --apply --retire-legacy
 npm run migrate:live-doman -- --apply --retire-legacy --purge-legacy --confirm-purge=DELETE_LEGACY_DOMAN
+
+## Canal en tiempo real y audio
+
+La API REST conserva la autoridad de la sesión. Para no mantener conexiones WebSocket dentro de la función serverless de Vercel, Live Doman publica snapshots mediante Ably. Los clientes solicitan tokens de corta duración por `POST /api/doman/live-sessions/:id/realtime-token`; los alumnos también usan `POST /api/doman/live-realtime-token` para recibir la apertura de una sala. Cada token sólo permite `subscribe` al canal autorizado y no contiene la clave de Ably.
+
+Los eventos `live.session.updated`, `live.participants.updated` y `live.room.opened` contienen `session_id` y, cuando aplica, `presentation_sequence`. El cliente debe descartar secuencias antiguas y recuperar el snapshot REST tras una reconexión.
+
+`ABLY_API_KEY` se configura únicamente en el backend. Para audio, el móvil solicita `POST /api/uploads/audio/presigned` con nombre, MIME y tamaño. El backend valida el rol, el tipo y el máximo de 10 MB, y devuelve una URL de `PUT` de un solo uso, limitada a esa ruta, tipo, tamaño y diez minutos. El móvil envía los bytes directamente a Vercel Blob y persiste únicamente la `url` pública que devuelve Blob. Nunca recibe `BLOB_READ_WRITE_TOKEN` ni escribe en el disco efímero de Vercel. El antiguo `POST /api/uploads/audio` queda como compatibilidad temporal para clientes anteriores, pero los clientes nuevos deben usar el flujo firmado.
 ```
 
 ## Criterios de aceptación de la futura implementación

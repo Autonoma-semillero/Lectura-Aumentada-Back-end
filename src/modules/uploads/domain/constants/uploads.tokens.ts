@@ -1,0 +1,1 @@
+export const UPLOADS_STORAGE = 'UPLOADS_STORAGE';

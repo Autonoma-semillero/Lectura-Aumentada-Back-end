@@ -21,7 +21,8 @@
     "demo:audio": "node scripts/set-audio-urls.js",
     "demo:model:cat": "node scripts/set-demo-animal-media.js gato",
     "demo:model:dog": "node scripts/set-demo-animal-media.js perro",
-    "migrate:live-doman": "node scripts/migrations/20260925-live-doman-sessions.js"
+    "migrate:live-doman": "node scripts/migrations/20260925-live-doman-sessions.js",
+    "migrate:live-doman-reliability": "node scripts/migrations/20261003-live-doman-reliability.js --apply"
   },
   "engines": {
     "node": ">=20"
@@ -35,10 +36,13 @@
     "@nestjs/platform-express": "^11.0.0",
     "@nestjs/swagger": "^11.2.6",
     "@nestjs/throttler": "^6.4.0",
+    "@vercel/blob": "^2.8.0",
+    "ably": "^2.29.0",
     "argon2": "^0.41.1",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.1",
     "mongoose": "^8.18.0",
+    "multer": "^2.4.0",
     "passport": "^0.7.0",
     "passport-jwt": "^4.0.1",
     "reflect-metadata": "^0.2.2",
@@ -51,6 +55,7 @@
     "@nestjs/testing": "^11.0.0",
     "@types/express": "^5.0.0",
     "@types/jest": "^29.5.14",
+    "@types/multer": "^2.3.0",
     "@types/node": "^22.10.2",
     "@types/passport-jwt": "^4.0.1",
     "@types/supertest": "^6.0.2",

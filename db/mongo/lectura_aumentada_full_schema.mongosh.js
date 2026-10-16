@@ -440,7 +440,7 @@ ensureCollection('doman_study_plans', {
       start_date: { bsonType: 'date' },
       end_date: { bsonType: 'date' },
       sessions_per_day: { bsonType: 'int', minimum: 1, maximum: 10 },
-      display_ms: { bsonType: 'int', minimum: 200, maximum: 10000 },
+      display_ms: { bsonType: 'int', minimum: 1000, maximum: 10000 },
       audio_mode: { enum: ['auto', 'manual', 'disabled'] },
       mode: { enum: ['manual', 'auto'] },
       status: {
@@ -584,7 +584,7 @@ ensureCollection('doman_plan_assignments', {
       plan_date: { bsonType: 'date' },
       target_cards_count: { bsonType: 'int', minimum: 1, maximum: 50 },
       target_sessions_count: { bsonType: 'int', minimum: 1, maximum: 10 },
-      display_ms: { bsonType: 'int', minimum: 200, maximum: 10000 },
+      display_ms: { bsonType: 'int', minimum: 1000, maximum: 10000 },
       force: { bsonType: 'bool' },
       status: {
         enum: ['processing', 'completed', 'partial', 'failed'],
@@ -656,7 +656,7 @@ ensureCollection('doman_sessions', {
       session_index: { bsonType: 'int', minimum: 1, maximum: 10 },
       category_id: { bsonType: 'objectId' },
       mode: { enum: ['manual', 'auto'] },
-      display_ms: { bsonType: 'int', minimum: 200, maximum: 10000 },
+      display_ms: { bsonType: 'int', minimum: 1000, maximum: 10000 },
       audio_mode: { enum: ['auto', 'manual', 'disabled'] },
       status: { enum: ['planned', 'in_progress', 'completed', 'cancelled'] },
       started_at: { bsonType: 'date' },

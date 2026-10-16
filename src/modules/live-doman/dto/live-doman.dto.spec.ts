@@ -18,6 +18,7 @@ describe('Live Doman DTO contract', () => {
 
   it('requires legal session pacing, sequence and idempotency command data', async () => {
     expect(await errors(CreateLiveSessionDto, { group_id: objectId, repertoire_id: objectId, pacing: 'teacher_controlled', display_ms: 1000 })).toHaveLength(0);
+    expect(await errors(CreateLiveSessionDto, { group_id: objectId, repertoire_id: objectId, display_ms: 500 })).not.toHaveLength(0);
     expect(await errors(CreateLiveSessionDto, { group_id: objectId, repertoire_id: objectId, pacing: 'free' })).not.toHaveLength(0);
     expect(await errors(LiveSessionCommandDto, { action: 'next', expected_sequence: 0, command_id: 'd4f7c1c9-560c-4d89-9c7d-8cec44e2b32e' })).toHaveLength(0);
     expect(await errors(LiveSessionCommandDto, { action: 'skip', expected_sequence: -1, command_id: 'not-a-uuid' })).not.toHaveLength(0);

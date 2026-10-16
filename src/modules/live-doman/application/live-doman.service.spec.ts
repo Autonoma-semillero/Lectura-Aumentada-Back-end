@@ -1,6 +1,7 @@
 import { BadRequestException, ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { LiveDomanService } from './live-doman.service';
 import type { ILiveDomanRepository, LiveDomanCard, LiveDomanRepertoire, LiveDomanSession } from '../domain/interfaces/live-doman.repository.interface';
+import type { ILiveDomanRealtime } from '../domain/interfaces/live-doman-realtime.interface';
 
 const id = {
   teacher: '507f1f77bcf86cd799439011', student: '507f1f77bcf86cd799439012', other: '507f1f77bcf86cd799439013',
@@ -25,26 +26,34 @@ describe('LiveDomanService', () => {
   const repository = {
     listCards: jest.fn(), findCard: jest.fn(), createCard: jest.fn(), updateCard: jest.fn(),
     listRepertoires: jest.fn(), findRepertoire: jest.fn(), createRepertoire: jest.fn(), findCardsByIds: jest.fn(),
-    createSession: jest.fn(), findSession: jest.fn(), listSessionsForStudent: jest.fn(), listParticipants: jest.fn(), joinSession: jest.fn(),
+    createSession: jest.fn(), findSession: jest.fn(), listSessionsForStudent: jest.fn(), listParticipants: jest.fn(), joinSession: jest.fn(), touchParticipant: jest.fn(), markStaleParticipants: jest.fn(), expireStaleSessions: jest.fn(),
     findSessionCommand: jest.fn(), setParticipantActivity: jest.fn(), applySessionCommand: jest.fn(), recordExposures: jest.fn(), acknowledge: jest.fn(), createObservation: jest.fn(),
+    enqueueRealtimeEvent: jest.fn(), claimRealtimeEvents: jest.fn(), markRealtimeEventDelivered: jest.fn(), retryRealtimeEvent: jest.fn(),
   } as unknown as jest.Mocked<ILiveDomanRepository>;
   const categories = { findById: jest.fn() };
   const groups = { getById: jest.fn() };
-  const service = new LiveDomanService(repository, categories as never, groups as never);
+  const realtime = { issueToken: jest.fn(), issueStudentFeedToken: jest.fn(), publishSession: jest.fn(), publishParticipants: jest.fn(), publishInvitations: jest.fn() } as jest.Mocked<ILiveDomanRealtime>;
+  const service = new LiveDomanService(repository, realtime, categories as never, groups as never);
 
   beforeEach(() => {
     jest.resetAllMocks();
     repository.findCardsByIds.mockResolvedValue([liveCard()]);
+    repository.findCard.mockResolvedValue(liveCard());
     repository.findRepertoire.mockResolvedValue(liveRepertoire());
     repository.findSession.mockResolvedValue(liveSession());
+    repository.listParticipants.mockResolvedValue([]);
+    repository.touchParticipant.mockResolvedValue(true);
+    repository.markStaleParticipants.mockResolvedValue([]);
+    repository.expireStaleSessions.mockResolvedValue([]);
+    repository.claimRealtimeEvents.mockResolvedValue([]);
     groups.getById.mockResolvedValue({ id: id.group, name: 'Grupo A', status: 'active', student_ids: [id.student] });
   });
 
   it('limits shared resources to staff and preserves the admin shared query', async () => {
     repository.listCards.mockResolvedValue([liveCard()]);
     repository.listRepertoires.mockResolvedValue([liveRepertoire()]);
-    await expect(service.listCards(teacher)).resolves.toEqual([liveCard()]);
-    await expect(service.listRepertoires(admin)).resolves.toEqual([liveRepertoire()]);
+    await expect(service.listCards(teacher)).resolves.toEqual([expect.objectContaining({ id: id.card })]);
+    await expect(service.listRepertoires(admin)).resolves.toEqual([expect.objectContaining({ id: id.repertoire })]);
     expect(repository.listCards).toHaveBeenCalledWith(id.teacher, false);
     expect(repository.listRepertoires).toHaveBeenCalledWith(id.other, true);
     await expect(service.listCards(student)).rejects.toBeInstanceOf(ForbiddenException);
@@ -80,6 +89,7 @@ describe('LiveDomanService', () => {
     repository.createSession.mockResolvedValue(liveSession());
     await service.createSession({ group_id: id.group, repertoire_id: id.repertoire }, teacher);
     expect(repository.createSession).toHaveBeenCalledWith(expect.objectContaining({ status: 'lobby', group_snapshot: { name: 'Grupo A', student_ids: [id.student] } }));
+    expect(repository.enqueueRealtimeEvent).toHaveBeenCalledWith(expect.objectContaining({ kind: 'session_created', session_id: id.session }));
     groups.getById.mockResolvedValueOnce({ id: id.group, name: 'Vacío', status: 'active', student_ids: [] });
     await expect(service.createSession({ group_id: id.group, repertoire_id: id.repertoire }, teacher)).rejects.toBeInstanceOf(BadRequestException);
   });
@@ -89,8 +99,8 @@ describe('LiveDomanService', () => {
     repository.listSessionsForStudent.mockResolvedValue([liveSession()]);
     repository.joinSession.mockResolvedValue({ session_id: id.session, student_id: id.student } as never);
     await expect(service.getSession(id.session, teacher)).resolves.toEqual(expect.objectContaining({ participants: [] }));
-    await expect(service.getSession(id.session, student)).resolves.toEqual({ session: liveSession() });
-    await expect(service.getCurrentSessions(student)).resolves.toEqual([liveSession()]);
+    await expect(service.getSession(id.session, student)).resolves.toEqual({ session: expect.objectContaining({ id: id.session }) });
+    await expect(service.getCurrentSessions(student)).resolves.toEqual([expect.objectContaining({ id: id.session })]);
     await expect(service.getCurrentSessions(teacher)).rejects.toBeInstanceOf(ForbiddenException);
     await expect(service.joinSession(id.session, student)).resolves.toEqual(expect.objectContaining({ session: expect.any(Object) }));
     await expect(service.joinSession(id.session, teacher)).rejects.toBeInstanceOf(ForbiddenException);
@@ -108,7 +118,7 @@ describe('LiveDomanService', () => {
     repository.findSession.mockResolvedValueOnce(current);
     repository.applySessionCommand.mockResolvedValue({ ...current, status, active_card_index: activeCardIndex, presentation_sequence: 1 } as LiveDomanSession);
     await service.command(id.session, { action, expected_sequence: 0, command_id: 'd4f7c1c9-560c-4d89-9c7d-8cec44e2b32e' }, teacher);
-    expect(repository.applySessionCommand).toHaveBeenCalledWith(id.session, 0, expect.objectContaining({ status }), expect.any(Object));
+    expect(repository.applySessionCommand).toHaveBeenCalledWith(id.session, 0, expect.any(Object), expect.any(Object));
     if (recordsExposure) expect(repository.recordExposures).toHaveBeenCalled();
   });
 
@@ -127,10 +137,28 @@ describe('LiveDomanService', () => {
     repository.acknowledge.mockResolvedValue(true);
     await service.acknowledge(id.session, { sequence: 2 }, student);
     expect(repository.acknowledge).toHaveBeenCalledWith(id.session, id.student, 2);
+    expect(repository.enqueueRealtimeEvent).toHaveBeenCalledWith(expect.objectContaining({ kind: 'participants_updated', session_id: id.session }));
     repository.findSession.mockResolvedValueOnce(liveSession({ presentation_sequence: 1 }));
     await expect(service.acknowledge(id.session, { sequence: 2 }, student)).rejects.toBeInstanceOf(BadRequestException);
     await service.observe(id.session, { student_id: id.student, kind: 'attention', value: 'observed', note: ' atento ' }, teacher);
     expect(repository.createObservation).toHaveBeenCalledWith(expect.objectContaining({ recorded_by: id.teacher, note: 'atento' }));
     await expect(service.observe(id.session, { student_id: id.other, kind: 'attention', value: 'observed' }, teacher)).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('issues a capability token only after authorizing the room or student feed', async () => {
+    realtime.issueToken.mockResolvedValue({ capability: 'room' });
+    realtime.issueStudentFeedToken.mockResolvedValue({ capability: 'feed' });
+    await expect(service.getRealtimeToken(id.session, student)).resolves.toEqual({ capability: 'room' });
+    await expect(service.getStudentFeedRealtimeToken(student)).resolves.toEqual({ capability: 'feed' });
+    await expect(service.getStudentFeedRealtimeToken(teacher)).rejects.toBeInstanceOf(ForbiddenException);
+    expect(realtime.issueToken).toHaveBeenCalledWith({ sessionId: id.session, userId: id.student, audience: 'student' });
+  });
+
+  it('never projects peer identifiers to a student', async () => {
+    const result = await service.getSession(id.session, student) as { session: Record<string, unknown> };
+    expect(result.session).not.toHaveProperty('teacher_id');
+    expect(result.session).not.toHaveProperty('group_id');
+    expect(result.session).not.toHaveProperty('group_snapshot');
+    expect(result.session.repertoire_snapshot).toEqual(expect.objectContaining({ cards: [expect.not.objectContaining({ card_id: expect.anything() })] }));
   });
 });

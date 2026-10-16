@@ -23,7 +23,7 @@ export const MIN_DAILY_PLAN_TARGET_SESSIONS = 1;
 export const MAX_DAILY_PLAN_TARGET_SESSIONS = 10;
 
 /** Tiempo de exposición por tarjeta; alineado con `doman_study_plans.display_ms`. */
-export const MIN_DOMAN_DISPLAY_MS = 200;
+export const MIN_DOMAN_DISPLAY_MS = 1_000;
 export const MAX_DOMAN_DISPLAY_MS = 10_000;
 
 /** Valores por defecto cuando ni el DTO ni el plan de estudio los definen. */
