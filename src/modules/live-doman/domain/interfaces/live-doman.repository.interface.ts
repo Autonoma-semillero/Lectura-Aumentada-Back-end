@@ -64,6 +64,7 @@ export interface ILiveDomanRepository {
   createSession(session: Omit<LiveDomanSession, 'id' | 'created_at' | 'updated_at'>): Promise<LiveDomanSession>;
   findSession(id: string): Promise<LiveDomanSession | null>;
   listSessionsForStudent(studentId: string): Promise<LiveDomanSession[]>;
+  listSessionsForTeacher(teacherId: string): Promise<LiveDomanSession[]>;
   listParticipants(sessionId: string): Promise<LiveDomanParticipant[]>;
   joinSession(sessionId: string, studentId: string): Promise<LiveDomanParticipant | null>;
   touchParticipant(sessionId: string, studentId: string): Promise<boolean>;

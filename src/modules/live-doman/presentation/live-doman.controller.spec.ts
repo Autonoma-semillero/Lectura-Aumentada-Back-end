@@ -11,7 +11,7 @@ const ids = { card: '507f1f77bcf86cd799439013', repertoire: '507f1f77bcf86cd7994
 describe('LiveDomanController', () => {
   const service = {
     listCards: jest.fn(), createCard: jest.fn(), updateCard: jest.fn(), listRepertoires: jest.fn(), createRepertoire: jest.fn(),
-    createSession: jest.fn(), getCurrentSessions: jest.fn(), getSession: jest.fn(), joinSession: jest.fn(), getRealtimeToken: jest.fn(), getStudentFeedRealtimeToken: jest.fn(), command: jest.fn(), acknowledge: jest.fn(), observe: jest.fn(),
+    createSession: jest.fn(), listSessions: jest.fn(), getCurrentSessions: jest.fn(), getSession: jest.fn(), joinSession: jest.fn(), getRealtimeToken: jest.fn(), getStudentFeedRealtimeToken: jest.fn(), command: jest.fn(), acknowledge: jest.fn(), observe: jest.fn(),
   };
   const controller = new LiveDomanController(service as unknown as LiveDomanService);
   const teacherRequest = request(teacherId, 'teacher');
@@ -21,7 +21,7 @@ describe('LiveDomanController', () => {
 
   it('declares the exact staff and student endpoint permissions', () => {
     expect(Reflect.getMetadata(ROLES_KEY, LiveDomanController)).toEqual(['student', 'teacher', 'admin']);
-    for (const method of ['listCards', 'createCard', 'updateCard', 'listRepertoires', 'createRepertoire', 'createSession', 'command', 'observe'] as const) {
+    for (const method of ['listCards', 'createCard', 'updateCard', 'listRepertoires', 'createRepertoire', 'createSession', 'listSessions', 'command', 'observe'] as const) {
       expect(Reflect.getMetadata(ROLES_KEY, controller[method])).toEqual(['teacher', 'admin']);
     }
     for (const method of ['current', 'studentFeedRealtimeToken', 'join', 'acknowledge'] as const) {
@@ -39,8 +39,10 @@ describe('LiveDomanController', () => {
     await controller.listRepertoires(teacherRequest);
     await controller.createRepertoire(repertoireDto, teacherRequest);
     await controller.createSession(sessionDto, teacherRequest);
+    await controller.listSessions(teacherRequest);
     const requester = { userId: teacherId, role: 'teacher' as const };
     expect(service.listCards).toHaveBeenCalledWith(requester);
+    expect(service.listSessions).toHaveBeenCalledWith(requester);
     expect(service.createCard).toHaveBeenCalledWith(cardDto, requester);
     expect(service.updateCard).toHaveBeenCalledWith(ids.card, { word: 'perro' }, requester);
     expect(service.listRepertoires).toHaveBeenCalledWith(requester);

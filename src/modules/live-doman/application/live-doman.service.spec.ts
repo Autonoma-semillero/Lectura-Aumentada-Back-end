@@ -26,7 +26,7 @@ describe('LiveDomanService', () => {
   const repository = {
     listCards: jest.fn(), findCard: jest.fn(), createCard: jest.fn(), updateCard: jest.fn(),
     listRepertoires: jest.fn(), findRepertoire: jest.fn(), createRepertoire: jest.fn(), findCardsByIds: jest.fn(),
-    createSession: jest.fn(), findSession: jest.fn(), listSessionsForStudent: jest.fn(), listParticipants: jest.fn(), joinSession: jest.fn(), touchParticipant: jest.fn(), markStaleParticipants: jest.fn(), expireStaleSessions: jest.fn(),
+    createSession: jest.fn(), findSession: jest.fn(), listSessionsForStudent: jest.fn(), listSessionsForTeacher: jest.fn(), listParticipants: jest.fn(), joinSession: jest.fn(), touchParticipant: jest.fn(), markStaleParticipants: jest.fn(), expireStaleSessions: jest.fn(),
     findSessionCommand: jest.fn(), setParticipantActivity: jest.fn(), applySessionCommand: jest.fn(), recordExposures: jest.fn(), acknowledge: jest.fn(), createObservation: jest.fn(),
     enqueueRealtimeEvent: jest.fn(), claimRealtimeEvents: jest.fn(), markRealtimeEventDelivered: jest.fn(), retryRealtimeEvent: jest.fn(),
   } as unknown as jest.Mocked<ILiveDomanRepository>;
@@ -104,6 +104,14 @@ describe('LiveDomanService', () => {
     await expect(service.getCurrentSessions(teacher)).rejects.toBeInstanceOf(ForbiddenException);
     await expect(service.joinSession(id.session, student)).resolves.toEqual(expect.objectContaining({ session: expect.any(Object) }));
     await expect(service.joinSession(id.session, teacher)).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
+  it('lists the requesting teacher rooms and rejects a student caller', async () => {
+    repository.expireStaleSessions.mockResolvedValue([]);
+    repository.listSessionsForTeacher.mockResolvedValue([liveSession()]);
+    await expect(service.listSessions(teacher)).resolves.toEqual([expect.objectContaining({ id: id.session })]);
+    expect(repository.listSessionsForTeacher).toHaveBeenCalledWith(id.teacher);
+    await expect(service.listSessions(student)).rejects.toBeInstanceOf(ForbiddenException);
   });
 
   it.each([
