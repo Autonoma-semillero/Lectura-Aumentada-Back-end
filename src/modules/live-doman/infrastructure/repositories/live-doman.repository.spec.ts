@@ -56,6 +56,8 @@ describeMongo('LiveDomanRepository (Mongo integration)', () => {
     expect(created.repertoire_snapshot.cards[0]).toMatchObject({ card_id: savedCard.id, display_text: 'GATO' });
     expect(await repository.listParticipants(created.id)).toEqual([expect.objectContaining({ student_id: ids.student, connection_state: 'invited' })]);
     expect(await repository.listSessionsForStudent(ids.student)).toEqual([expect.objectContaining({ id: created.id, status: 'lobby' })]);
+    expect(await repository.listSessionsForTeacher(ids.teacher)).toEqual([expect.objectContaining({ id: created.id, status: 'lobby' })]);
+    expect(await repository.listSessionsForTeacher(ids.student)).toEqual([]);
     expect(await repository.joinSession(created.id, ids.student)).toEqual(expect.objectContaining({ connection_state: 'ready' }));
   });
 

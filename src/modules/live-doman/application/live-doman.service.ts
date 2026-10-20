@@ -26,6 +26,12 @@ export class LiveDomanService {
     return this.liveDomanRepository.listCards(requester.userId, requester.role === 'admin');
   }
 
+  async listSessions(requester: Requester): Promise<LiveDomanSession[]> {
+    this.assertTeacher(requester);
+    await this.recoverExpiredSessions();
+    return this.liveDomanRepository.listSessionsForTeacher(requester.userId);
+  }
+
   async createCard(dto: CreateLiveCardDto, requester: Requester): Promise<LiveDomanCard> {
     this.assertTeacher(requester);
     await this.categoriesService.findById(dto.category_id);

@@ -34,6 +34,9 @@ export class LiveDomanController {
   @Post('live-sessions') @Roles('teacher', 'admin') @HttpCode(HttpStatus.CREATED)
   createSession(@Body() dto: CreateLiveSessionDto, @Req() req: Request & { user: AuthRequestUser }) { return this.liveDomanService.createSession(dto, this.requester(req)); }
 
+  @Get('live-sessions') @Roles('teacher', 'admin')
+  listSessions(@Req() req: Request & { user: AuthRequestUser }) { return this.liveDomanService.listSessions(this.requester(req)); }
+
   @Get('live-sessions/current') @Roles('student')
   current(@Req() req: Request & { user: AuthRequestUser }) { return this.liveDomanService.getCurrentSessions(this.requester(req)); }
 
