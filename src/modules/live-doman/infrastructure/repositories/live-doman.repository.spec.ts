@@ -86,7 +86,7 @@ describeMongo('LiveDomanRepository (Mongo integration)', () => {
   });
 
   function session(repertoireId: string, cardId: string): Omit<LiveDomanSession, 'id' | 'created_at' | 'updated_at'> {
-    return { schema_version: 1, teacher_id: ids.teacher, group_id: ids.group, repertoire_id: repertoireId, group_snapshot: { name: 'Grupo A', student_ids: [ids.student] }, repertoire_snapshot: { name: 'Animales', stage: 'single_words', category_id: ids.category, cards: [{ position: 0, card_id: cardId, word: 'gato', display_text: 'GATO' }] }, presentation: { pacing: 'teacher_controlled', display_ms: 1000, audio_policy: 'teacher_voice' }, status: 'lobby', active_card_index: null, presentation_sequence: 0 };
+    return { schema_version: 1, teacher_id: ids.teacher, group_id: ids.group, repertoire_id: repertoireId, group_snapshot: { name: 'Grupo A', student_ids: [ids.student] }, repertoire_snapshot: { name: 'Animales', stage: 'single_words', category_id: ids.category, cards: [{ position: 0, card_id: cardId, word: 'gato', display_text: 'GATO' }] }, presentation: { pacing: 'teacher_controlled', display_ms: 1000, audio_policy: 'teacher_voice' }, experience_mode: 'standard', status: 'lobby', active_card_index: null, presentation_sequence: 0 };
   }
   function event(suffix: string) { return { command_id: `command-${suffix}`, event_type: 'session_started', actor_id: ids.teacher, actor_type: 'teacher' as const, payload: {} }; }
 });

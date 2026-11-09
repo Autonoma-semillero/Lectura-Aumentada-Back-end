@@ -176,7 +176,7 @@ function liveSessionValidator() {
       bsonType: 'object',
       required: [
         'schema_version', 'teacher_id', 'group_id', 'group_snapshot', 'repertoire_id',
-        'repertoire_snapshot', 'presentation', 'status', 'presentation_sequence', 'created_at', 'updated_at',
+        'repertoire_snapshot', 'presentation', 'experience_mode', 'status', 'presentation_sequence', 'created_at', 'updated_at',
       ],
       additionalProperties: false,
       properties: {
@@ -195,6 +195,7 @@ function liveSessionValidator() {
           bsonType: 'object', required: ['pacing', 'display_ms', 'audio_policy'], additionalProperties: false,
           properties: { pacing: { enum: ['teacher_controlled', 'timed'] }, display_ms: { bsonType: 'int', minimum: 500, maximum: 10000 }, audio_policy: { enum: ['teacher_voice', 'optional_recording', 'disabled'] } },
         },
+        experience_mode: { enum: ['standard', 'vr'] },
         status: { enum: ['lobby', 'running', 'paused', 'ended', 'cancelled'] },
         active_card_index: { bsonType: ['int', 'null'], minimum: 0 }, presentation_sequence: { bsonType: 'int', minimum: 0 },
         presentation_started_at: { bsonType: ['date', 'null'] }, paused_at: { bsonType: ['date', 'null'] },

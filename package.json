@@ -22,7 +22,8 @@
     "demo:model:cat": "node scripts/set-demo-animal-media.js gato",
     "demo:model:dog": "node scripts/set-demo-animal-media.js perro",
     "migrate:live-doman": "node scripts/migrations/20260925-live-doman-sessions.js",
-    "migrate:live-doman-reliability": "node scripts/migrations/20261003-live-doman-reliability.js --apply"
+    "migrate:live-doman-reliability": "node scripts/migrations/20261003-live-doman-reliability.js --apply",
+    "migrate:live-doman-experience-mode": "node scripts/migrations/20261108-live-doman-experience-mode.js --apply"
   },
   "engines": {
     "node": ">=20"

@@ -891,7 +891,7 @@ ensureCollection('doman_live_sessions', {
     required: [
       'schema_version', 'teacher_id', 'group_id', 'group_snapshot',
       'repertoire_id', 'repertoire_snapshot', 'presentation', 'status',
-      'presentation_sequence', 'created_at', 'updated_at',
+      'experience_mode', 'presentation_sequence', 'created_at', 'updated_at',
     ],
     additionalProperties: true,
     properties: {
@@ -902,6 +902,7 @@ ensureCollection('doman_live_sessions', {
       repertoire_id: { bsonType: 'objectId' },
       repertoire_snapshot: { bsonType: 'object' },
       presentation: { bsonType: 'object' },
+      experience_mode: { enum: ['standard', 'vr'] },
       status: { enum: ['lobby', 'running', 'paused', 'ended', 'cancelled'] },
       active_card_index: { bsonType: ['int', 'null'], minimum: 0 },
       presentation_sequence: { bsonType: 'int', minimum: 0 },

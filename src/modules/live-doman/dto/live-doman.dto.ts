@@ -35,6 +35,7 @@ export class CreateLiveSessionDto {
   @ApiProperty() @IsMongoId() repertoire_id!: string;
   @ApiPropertyOptional({ enum: ['teacher_controlled', 'timed'] }) @IsOptional() @IsIn(['teacher_controlled', 'timed']) pacing?: 'teacher_controlled' | 'timed';
   @ApiPropertyOptional() @IsOptional() @IsInt() @Min(1000) @Max(10000) display_ms?: number;
+  @ApiPropertyOptional({ enum: ['standard', 'vr'], default: 'standard' }) @IsOptional() @IsIn(['standard', 'vr']) experience_mode?: 'standard' | 'vr';
 }
 
 export class LiveSessionCommandDto {

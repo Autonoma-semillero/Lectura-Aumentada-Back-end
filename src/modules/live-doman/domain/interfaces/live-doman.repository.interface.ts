@@ -21,6 +21,7 @@ export type LiveDomanSession = {
   group_snapshot: { name: string; student_ids: string[] };
   repertoire_snapshot: { name: string; stage: LiveDomanRepertoire['stage']; category_id: string; cards: Array<{ position: number; card_id: string; word: string; display_text: string; language?: string; audio_url?: string }> };
   presentation: { pacing: 'teacher_controlled' | 'timed'; display_ms: number; audio_policy: 'teacher_voice' | 'optional_recording' | 'disabled' };
+  experience_mode: 'standard' | 'vr';
   status: 'lobby' | 'running' | 'paused' | 'ended' | 'cancelled'; active_card_index: number | null; presentation_sequence: number;
   presentation_started_at?: Date; paused_at?: Date; started_at?: Date; ended_at?: Date; expires_at?: Date;
   ended_reason?: 'teacher_ended' | 'teacher_cancelled' | 'expired'; created_at: Date; updated_at: Date;
@@ -31,6 +32,7 @@ export type StudentLiveDomanSession = {
   id: string;
   repertoire_snapshot: { name: string; cards: Array<{ position: number; display_text: string; language?: string; audio_url?: string }> };
   presentation: LiveDomanSession['presentation'];
+  experience_mode: LiveDomanSession['experience_mode'];
   status: LiveDomanSession['status'];
   active_card_index: number | null;
   presentation_sequence: number;

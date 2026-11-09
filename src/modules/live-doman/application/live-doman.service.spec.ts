@@ -19,7 +19,7 @@ function liveRepertoire(overrides: Partial<LiveDomanRepertoire> = {}): LiveDoman
   return { schema_version: 1, id: id.repertoire, name: 'Animales', normalized_name: 'animales', stage: 'single_words', category_id: id.category, card_ids: [id.card], created_by: id.teacher, status: 'active', presentation: { default_pacing: 'teacher_controlled', default_display_ms: 1000, audio_policy: 'teacher_voice' }, created_at: new Date(), updated_at: new Date(), ...overrides };
 }
 function liveSession(overrides: Partial<LiveDomanSession> = {}): LiveDomanSession {
-  return { schema_version: 1, id: id.session, teacher_id: id.teacher, group_id: id.group, repertoire_id: id.repertoire, group_snapshot: { name: 'Grupo A', student_ids: [id.student] }, repertoire_snapshot: { name: 'Animales', stage: 'single_words', category_id: id.category, cards: [{ position: 0, card_id: id.card, word: 'gato', display_text: 'GATO' }] }, presentation: { pacing: 'teacher_controlled', display_ms: 1000, audio_policy: 'teacher_voice' }, status: 'lobby', active_card_index: null, presentation_sequence: 0, created_at: new Date(), updated_at: new Date(), ...overrides };
+  return { schema_version: 1, id: id.session, teacher_id: id.teacher, group_id: id.group, repertoire_id: id.repertoire, group_snapshot: { name: 'Grupo A', student_ids: [id.student] }, repertoire_snapshot: { name: 'Animales', stage: 'single_words', category_id: id.category, cards: [{ position: 0, card_id: id.card, word: 'gato', display_text: 'GATO' }] }, presentation: { pacing: 'teacher_controlled', display_ms: 1000, audio_policy: 'teacher_voice' }, experience_mode: 'standard', status: 'lobby', active_card_index: null, presentation_sequence: 0, created_at: new Date(), updated_at: new Date(), ...overrides };
 }
 
 describe('LiveDomanService', () => {
@@ -87,8 +87,8 @@ describe('LiveDomanService', () => {
 
   it('snapshots a valid group and repertoire when opening a session', async () => {
     repository.createSession.mockResolvedValue(liveSession());
-    await service.createSession({ group_id: id.group, repertoire_id: id.repertoire }, teacher);
-    expect(repository.createSession).toHaveBeenCalledWith(expect.objectContaining({ status: 'lobby', group_snapshot: { name: 'Grupo A', student_ids: [id.student] } }));
+    await service.createSession({ group_id: id.group, repertoire_id: id.repertoire, experience_mode: 'vr' }, teacher);
+    expect(repository.createSession).toHaveBeenCalledWith(expect.objectContaining({ status: 'lobby', experience_mode: 'vr', group_snapshot: { name: 'Grupo A', student_ids: [id.student] } }));
     expect(repository.enqueueRealtimeEvent).toHaveBeenCalledWith(expect.objectContaining({ kind: 'session_created', session_id: id.session }));
     groups.getById.mockResolvedValueOnce({ id: id.group, name: 'Vacío', status: 'active', student_ids: [] });
     await expect(service.createSession({ group_id: id.group, repertoire_id: id.repertoire }, teacher)).rejects.toBeInstanceOf(BadRequestException);

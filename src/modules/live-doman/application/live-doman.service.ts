@@ -117,7 +117,7 @@ export class LiveDomanService {
         schema_version: 1, teacher_id: requester.userId, group_id: group.id, repertoire_id: repertoire.id,
         group_snapshot: { name: group.name, student_ids: group.student_ids },
         repertoire_snapshot: { name: repertoire.name, stage: repertoire.stage, category_id: repertoire.category_id, cards: repertoire.card_ids.map((cardId, position) => { const card = ordered.get(cardId); if (!card) throw new BadRequestException('A repertoire card is missing'); return { position, card_id: card.id, word: card.word, display_text: card.display_text, ...(card.language ? { language: card.language } : {}), ...(card.audio_url ? { audio_url: card.audio_url } : {}) }; }) },
-        presentation, status: 'lobby', active_card_index: null, presentation_sequence: 0, expires_at: this.lobbyExpiresAt(now),
+        presentation, experience_mode: dto.experience_mode ?? 'standard', status: 'lobby', active_card_index: null, presentation_sequence: 0, expires_at: this.lobbyExpiresAt(now),
       });
       await this.enqueueRealtime({ kind: 'session_created', session_id: created.id, payload: {}, dedupe_key: `invitation:${created.id}` });
       await this.flushRealtimeOutbox();
@@ -298,6 +298,7 @@ export class LiveDomanService {
       id: session.id,
       repertoire_snapshot: { name: session.repertoire_snapshot.name, cards: session.repertoire_snapshot.cards.map((card) => ({ position: card.position, display_text: card.display_text, ...(card.language ? { language: card.language } : {}), ...(card.audio_url ? { audio_url: card.audio_url } : {}) })) },
       presentation: session.presentation,
+      experience_mode: session.experience_mode,
       status: session.status,
       active_card_index: session.active_card_index,
       presentation_sequence: session.presentation_sequence,
