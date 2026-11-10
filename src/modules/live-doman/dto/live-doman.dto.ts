@@ -15,6 +15,7 @@ export class UpdateLiveCardDto {
   @ApiPropertyOptional() @IsOptional() @IsMongoId() category_id?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(2048) audio_url?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(32) language?: string;
+  @ApiPropertyOptional() @IsOptional() @IsMongoId() learning_unit_id?: string;
   @ApiPropertyOptional({ enum: ['owner_only', 'shared'] }) @IsOptional() @IsIn(['owner_only', 'shared']) sharing_scope?: 'owner_only' | 'shared';
   @ApiPropertyOptional({ enum: ['active', 'archived'] }) @IsOptional() @IsIn(['active', 'archived']) status?: 'active' | 'archived';
 }
