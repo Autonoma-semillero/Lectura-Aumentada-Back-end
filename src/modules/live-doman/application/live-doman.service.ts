@@ -63,7 +63,8 @@ export class LiveDomanService {
     const updated = await this.liveDomanRepository.updateCard(id, {
       ...(dto.word !== undefined ? { word, normalized_word: word, display_text: word.toLocaleUpperCase('es-CO') } : {}),
       ...(dto.category_id ? { category_id: categoryId } : {}), ...(dto.language !== undefined ? { language } : {}),
-      ...(dto.audio_url !== undefined ? { audio_url: audioUrl } : {}), ...(dto.sharing_scope ? { sharing_scope: dto.sharing_scope } : {}),
+      ...(dto.audio_url !== undefined ? { audio_url: audioUrl } : {}), ...(dto.learning_unit_id ? { learning_unit_id: dto.learning_unit_id } : {}),
+      ...(dto.sharing_scope ? { sharing_scope: dto.sharing_scope } : {}),
       ...(dto.status ? { status: dto.status } : {}), content_fingerprint: this.fingerprint(categoryId, word, language, audioUrl),
     });
     if (!updated) throw new NotFoundException('Live Doman card not found');

@@ -71,6 +71,11 @@ describe('LiveDomanService', () => {
     repository.updateCard.mockResolvedValue(liveCard({ word: 'perro' }));
     await service.updateCard(id.card, { word: ' Perro ' }, teacher);
     expect(repository.updateCard).toHaveBeenCalledWith(id.card, expect.objectContaining({ word: 'perro', display_text: 'PERRO' }));
+    const learningUnitId = '507f1f77bcf86cd799439099';
+    await service.updateCard(id.card, { learning_unit_id: learningUnitId }, teacher);
+    expect(repository.updateCard).toHaveBeenLastCalledWith(id.card, expect.objectContaining({ learning_unit_id: learningUnitId }));
+    await service.updateCard(id.card, { word: 'perro' }, teacher);
+    expect(repository.updateCard).toHaveBeenLastCalledWith(id.card, expect.not.objectContaining({ learning_unit_id: expect.anything() }));
     repository.findCard.mockResolvedValueOnce(liveCard({ created_by: id.other }));
     await expect(service.updateCard(id.card, {}, teacher)).rejects.toBeInstanceOf(ForbiddenException);
     repository.findCard.mockResolvedValueOnce(null);
