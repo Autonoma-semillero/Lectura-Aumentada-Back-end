@@ -16,10 +16,13 @@ import {
 import type { UserRole } from '../domain/interfaces/user.interface';
 
 export class CreateUserDto {
-  @ApiProperty({ example: 'usuario@ejemplo.com' })
+  @ApiPropertyOptional({
+    example: 'usuario@ejemplo.com',
+    description: 'Requerido para profesores y administradores. Opcional para estudiantes, que ingresan por PIN.',
+  })
+  @IsOptional()
   @IsEmail()
-  @IsNotEmpty()
-  email!: string;
+  email?: string;
 
   @ApiProperty({
     example: 'ana.garcia',

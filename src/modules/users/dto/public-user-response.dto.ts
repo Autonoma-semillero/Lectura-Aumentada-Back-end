@@ -5,8 +5,8 @@ export class PublicUserResponseDto {
   @ApiProperty()
   id!: string;
 
-  @ApiProperty()
-  email!: string;
+  @ApiPropertyOptional()
+  email?: string;
 
   @ApiPropertyOptional()
   username?: string;

@@ -1,4 +1,4 @@
-import { ConflictException, Inject, Injectable } from '@nestjs/common';
+import { BadRequestException, ConflictException, Inject, Injectable } from '@nestjs/common';
 import { hashPassword } from '../../auth/domain/password.util';
 import { createStudentPinLookup } from '../../auth/domain/student-pin.util';
 import { USERS_REPOSITORY } from '../domain/constants/users.tokens';
@@ -47,7 +47,12 @@ export class UsersService {
   }
 
   async createPublic(dto: CreateUserDto): Promise<PublicUserResponseDto> {
-    const email = dto.email.trim().toLowerCase();
+    const roles = dto.roles ?? ['student'];
+    const isStudentOnly = roles.length === 1 && roles[0] === 'student';
+    if (!isStudentOnly && !dto.email) {
+      throw new BadRequestException('Email is required for teacher and admin accounts');
+    }
+    const email = dto.email ? dto.email.trim().toLowerCase() : undefined;
     const username = dto.username.trim().toLowerCase();
     await this.ensureUniqueIdentifiers(email, username);
 

@@ -41,7 +41,7 @@ function ensureCollection(name, validator) {
 ensureCollection('users', {
   $jsonSchema: {
     bsonType: 'object',
-    required: ['email', 'created_at', 'updated_at'],
+    required: ['created_at', 'updated_at'],
     additionalProperties: true,
     properties: {
       email: { bsonType: 'string', minLength: 3 },
@@ -205,7 +205,10 @@ ensureCollection('progress_logs', {
   },
 });
 
-db.users.createIndex({ email: 1 }, { unique: true, name: 'ux_users_email' });
+db.users.createIndex(
+  { email: 1 },
+  { unique: true, sparse: true, name: 'ux_users_email' },
+);
 db.users.createIndex(
   { username: 1 },
   { unique: true, sparse: true, name: 'ux_users_username' },

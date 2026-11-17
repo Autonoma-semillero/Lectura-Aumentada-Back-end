@@ -552,7 +552,7 @@ export class GroupsService {
   private audienceLabel(item: AudienceSearchItemDto): string {
     return item.type === 'group'
       ? item.name
-      : (item.display_name ?? item.username ?? item.email);
+      : (item.display_name ?? item.username ?? item.email ?? item.id);
   }
 
   private addAudienceSource(
